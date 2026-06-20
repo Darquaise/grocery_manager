@@ -21,6 +21,9 @@ services:
       # Shared Postgres on the shared-db network (host = service name "postgres").
       # psycopg v3 driver to match SQLModel/SQLAlchemy 2.
       DATABASE_URL: postgresql+psycopg://grocery_app:${GROCERY_DB_PASSWORD:?set GROCERY_DB_PASSWORD in .env}@postgres:5432/grocery
+      # Alembic owns the schema here (the container runs `alembic upgrade head`
+      # on start); keep create_all out of the way.
+      DB_AUTO_CREATE: "false"
     ports:
       # Loopback only; host nginx proxies shopping.darquaise.com here.
       - "127.0.0.1:8000:8000"

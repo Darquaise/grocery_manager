@@ -1,9 +1,9 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
 from ..db import get_session
-from ..models import Category, User
+from ..models import Category, Product, User
 from .deps import current_user
 
 router = APIRouter(prefix="/categories", tags=["categories"])
@@ -12,6 +12,11 @@ router = APIRouter(prefix="/categories", tags=["categories"])
 class CategoryIn(BaseModel):
     name: str
     sort_order: int = 0
+
+
+class CategoryUpdate(BaseModel):
+    name: str | None = None
+    sort_order: int | None = None
 
 
 @router.get("", response_model=list[Category])
@@ -30,3 +35,40 @@ def create_category(
     session.commit()
     session.refresh(category)
     return category
+
+
+@router.patch("/{category_id}", response_model=Category)
+def update_category(
+    category_id: int,
+    data: CategoryUpdate,
+    session: Session = Depends(get_session),
+    user: User = Depends(current_user),
+):
+    category = session.get(Category, category_id)
+    if not category:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "category not found")
+    for field, value in data.model_dump(exclude_unset=True).items():
+        setattr(category, field, value)
+    session.add(category)
+    session.commit()
+    session.refresh(category)
+    return category
+
+
+@router.delete("/{category_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_category(
+    category_id: int,
+    session: Session = Depends(get_session),
+    user: User = Depends(current_user),
+):
+    """Delete a category; products in it fall back to "no category" (null)."""
+    category = session.get(Category, category_id)
+    if not category:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "category not found")
+    for product in session.exec(
+        select(Product).where(Product.category_id == category_id)
+    ).all():
+        product.category_id = None
+        session.add(product)
+    session.delete(category)
+    session.commit()

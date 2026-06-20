@@ -1,0 +1,31 @@
+# LOCAL DEVELOPMENT DATABASE ONLY — never deployed.
+#
+# Production uses the shared Postgres via compose.yml (host "postgres" on the
+# external shared-db network). This file spins up a throwaway local Postgres so
+# the app can run fully offline, independent of the server DB. Managed by the
+# scripts in ./scripts (dev-start.sh / dev-stop.sh / dev-restart.sh).
+
+name: grocery-dev
+
+services:
+  db:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: grocery_app
+      POSTGRES_PASSWORD: grocery
+      POSTGRES_DB: grocery
+    ports:
+      # Loopback only; matches the local DATABASE_URL the dev scripts export.
+      - "127.0.0.1:5432:5432"
+    volumes:
+      # Postgres 18+ stores data under /var/lib/postgresql/<version>/… so the
+      # persistent mount goes one level up (not /var/lib/postgresql/data).
+      - grocery-dev-db:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U grocery_app -d grocery"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  grocery-dev-db:

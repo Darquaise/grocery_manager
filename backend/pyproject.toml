@@ -17,6 +17,8 @@ dependencies = [
 [dependency-groups]
 dev = [
     "ruff>=0.8",
+    "pytest>=8.3",
+    "httpx>=0.28",
 ]
 
 [tool.uv]
@@ -26,3 +28,7 @@ package = false
 [tool.ruff]
 target-version = "py314"
 line-length = 100
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

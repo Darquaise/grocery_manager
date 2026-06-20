@@ -18,15 +18,26 @@ Needs a reachable Postgres via `DATABASE_URL`. Options:
 Config comes from env vars (see `../.env.example`): `DATABASE_URL`,
 `SESSION_SECRET`, `USER1_*`, `USER2_*`.
 
-## Migrations (Alembic)
+## Tests
 
 ```bash
-uv run alembic revision --autogenerate -m "init"
-uv run alembic upgrade head
+uv run pytest        # in-memory SQLite, no real DB needed
+uv run ruff check .
 ```
 
-The schema is the SQLModel set in `app/models.py`. In production Alembic owns the
-schema; the app additionally `create_all()`s on startup as a dev convenience.
+## Migrations (Alembic)
+
+The init migration already exists (`migrations/versions/*_init.py`) and is the
+schema source of truth. Apply / regenerate:
+
+```bash
+uv run alembic upgrade head                         # apply
+uv run alembic revision --autogenerate -m "msg"     # after model changes
+```
+
+In production Alembic owns the schema: the container runs `alembic upgrade head`
+on start and `DB_AUTO_CREATE=false`. Locally `DB_AUTO_CREATE` defaults to true, so
+the app `create_all()`s on startup as a dev convenience.
 
 ## Layout
 
@@ -38,6 +49,8 @@ app/
   models.py      SQLModel tables (User, Category, Product, ShoppingListItem, ShoppingTrip)
   security.py    argon2 hashing
   seed.py        default categories + the two accounts
-  api/           routers: auth, categories, products, shopping
-migrations/      Alembic
+  shopping_logic.py  auto shopping-list reconciliation + snooze lifecycle
+  api/           routers: auth, users, categories, products, shopping
+migrations/      Alembic (init revision present)
+tests/           pytest (auth, products, auto-list, trips, categories/users)
 ```

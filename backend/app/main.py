@@ -8,7 +8,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.types import Scope
 
-from .api import auth, categories, products, shopping
+from .api import auth, categories, products, shopping, users
 from .config import settings
 from .db import engine
 from .seed import seed
@@ -18,9 +18,11 @@ STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Dev convenience: ensure tables exist + seed. In production Alembic owns the
-    # schema (see migrations/); create_all is idempotent and harmless.
-    SQLModel.metadata.create_all(engine)
+    # In production Alembic owns the schema (the container runs `alembic upgrade
+    # head` before uvicorn); for local dev create_all is a convenience. Seeding
+    # (default categories + the two accounts) is idempotent and always runs.
+    if settings.db_auto_create:
+        SQLModel.metadata.create_all(engine)
     with Session(engine) as session:
         seed(session)
     yield
@@ -35,6 +37,7 @@ app.add_middleware(
 )
 
 app.include_router(auth.router, prefix="/api")
+app.include_router(users.router, prefix="/api")
 app.include_router(categories.router, prefix="/api")
 app.include_router(products.router, prefix="/api")
 app.include_router(shopping.router, prefix="/api")

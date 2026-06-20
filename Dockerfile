@@ -30,4 +30,6 @@ RUN set -eux; \
     rm -rf /tmp/dist
 
 EXPOSE 8000
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Alembic owns the schema in prod: bring the DB up to head, then serve. With a
+# real DB (compose sets DB_AUTO_CREATE=false) create_all stays out of the way.
+CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"]

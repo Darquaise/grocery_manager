@@ -19,3 +19,6 @@ frontend/.angular/
 
 # Built SPA (copied into the backend image at build time)
 backend/static/
+
+# Local dev runtime (PID files + logs from scripts/dev-*.sh)
+/.dev/

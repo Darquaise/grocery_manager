@@ -7,9 +7,10 @@ Private, mobile-first **PWA** für genau 2 Personen, um Küchen-Verbrauchsmateri
 - **Backend-Dev-Doku:** [`backend/README.md`](./backend/README.md).
 - **Server-/Infrastruktur:** Schwester-Repo [`../main-server-infra`](../main-server-infra) (geteilte Postgres, nginx, TLS) — **bereits live** auf ep3o.
 
-> **Stand: 2026-06-20** — Scaffold steht und ist **end-to-end verifiziert** (Build +
-> Container-Smoke-Test grün). Die eigentliche **Fachlogik aus `PLAN.md` ist noch
-> größtenteils offen** (siehe „Was noch zu tun ist").
+> **Stand: 2026-06-20** — **Phase 1 + 2 aus `PLAN.md` umgesetzt** und end-to-end
+> verifiziert (Backend-`pytest` 23 grün, Angular-Prod-Build grün, Docker-Container-
+> Smoke-Test grün inkl. Login → Auto-Einkaufsliste → Trip-Abschluss → Archiv).
+> Offen bleibt nur noch die **optionale Phase 3** (Web-Push, MHD) und mehr Tests/CI.
 
 ---
 
@@ -85,14 +86,24 @@ grocery_manager/
 compose` ist hier per Symlink in `~/.docker/cli-plugins/` aktiviert; falls weg,
 neu verlinken (`ln -sfn /opt/homebrew/bin/docker-compose ~/.docker/cli-plugins/docker-compose`).
 
-**DB für lokal:** Tunnel auf die echte Postgres oder eine Wegwerf-DB:
+**Schnellster Weg — ein Befehl, komplett offline** (lokale Postgres in Docker +
+Backend + Frontend, alles mit Hot-Reload; die echte Server-DB wird **nicht**
+berührt):
 ```bash
-ssh -L 5432:127.0.0.1:5432 ep3o          # dann DATABASE_URL=…@localhost:5432/grocery
-# oder:
-docker run --rm -e POSTGRES_PASSWORD=x -p 5432:5432 postgres:18
+./scripts/dev-start.sh      # → http://localhost:4200  (API auf :8000)
+./scripts/dev-stop.sh       # alles stoppen (lokale DB-Daten bleiben erhalten)
+./scripts/dev-restart.sh    # = stop + start (DB-Daten bleiben erhalten)
+./scripts/dev-reset.sh      # DB zurücksetzen (Daten löschen) + frisch starten
 ```
+Die lokale DB läuft via `compose.dev.yml` (eigener Compose-Stack `grocery-dev`,
+isoliert von Prod) und **persistiert über Stop/Restart** in einem Docker-Volume.
+Nur `dev-reset.sh` löscht die Daten. Das Start-Skript erzwingt `DATABASE_URL` auf
+die lokale DB und legt das Schema per `create_all` an (kein Alembic-Schritt nötig).
+Logs: `.dev/*.log`.
 
-**Starten (zwei Terminals, absolute Pfade!):**
+**Manuell (Alternative, zwei Terminals):** braucht eine erreichbare Postgres unter
+`localhost:5432` — entweder Tunnel auf die echte (`ssh -L 5432:127.0.0.1:5432 ep3o`)
+oder eine Wegwerf-DB (`docker compose -f compose.dev.yml up -d`), dann:
 ```bash
 cd /Users/kofidiering/projects/grocery_manager/backend && uv run uvicorn app.main:app --reload
 cd /Users/kofidiering/projects/grocery_manager/frontend && npm start      # http://localhost:4200
@@ -127,38 +138,39 @@ müssen identisch sein. **Nicht** ins Git.
 
 ## Was schon steht (verifiziert)
 
-- **Backend** lauffähig: config/db/models (alle 5 PLAN-Entitäten)/security/seed/4 API-Router,
-  SPA-Mount mit SPA-Fallback. Geprüft: `uv` import + `ruff` + TestClient (alle 8 API-Pfade,
-  Auth-Schutz greift).
-- **Frontend** baut: App-Shell mit Bottom-Nav, `authGuard`, `AuthService`, Login + 4 Seiten,
-  Tailwind + PWA (Service Worker, Manifest, iOS-Tags).
-- **Dockerfile** baut das kombinierte Image (482 MB); Container serviert API + SPA + Deep-Links (200).
-- **`compose.yml`** validiert; lokales `docker compose` ist eingerichtet (colima + Plugin).
+- **Backend** — volle Fachlogik, nicht mehr nur Stubs:
+  - **Produkte**: CRUD + Soft-Delete/Restore + `adjust` (Verbrauchen/Auffüllen),
+    alle 3 Tracking-Typen, `min_value`/Status-Schwelle, `step`, `full_value`.
+  - **Auto-Einkaufsliste** (`app/shopping_logic.py`): `current_value <= min_value`
+    → Auto-Eintrag; Snooze-Lifecycle (`ignored_until_restock`) bis Wiederauffüllen.
+  - **Einkaufen**: Abhaken (`open`↔`inCart`), Auto-Snooze beim Wegwischen,
+    **Trip abschließen → Archiv** mit „Voll"-Wert-Logik + optionalem Gesamtpreis.
+  - **Kategorien**: CRUD (Delete setzt Produkt-Kategorie auf `null`). **Users**: Liste
+    + eigene Farbe. Geprüft: `ruff` + **`pytest` (23 Tests grün)**.
+- **Alembic**: Initialmigration `migrations/versions/*_init.py` ist die Schema-Wahrheit;
+  Container fährt beim Start `alembic upgrade head` (compose: `DB_AUTO_CREATE=false`),
+  lokal bleibt `create_all` als Dev-Komfort (`DB_AUTO_CREATE=true`, Default).
+- **Frontend** (Angular-Prod-Build grün): App-Shell + Bottom-Nav, `authGuard`, Login,
+  **Bestand** (Kategorie-Gruppierung, Lagerort-Filter, Suche, Knapp-Markierung),
+  **Produkt-Detail** (anlegen/bearbeiten/±-Buttons/„Voll"/Soft-Delete), **Einkaufsliste**
+  (Optimistic-Abhaken + Retry-Queue + localStorage-Cache, Autovervollständigung,
+  Farbmarkierung, Trip-Abschluss), **Archiv**, **Einstellungen** (Kategorien-CRUD,
+  Nutzerfarben, Logout). PWA: Service Worker, Manifest + Icons (neu generiert).
+- **Docker**: kombiniertes Image baut; Container-Smoke-Test grün — SPA + Deep-Links
+  + ganzer API-Fluss (Login → Auto-Liste → Trip → Archiv) gegen SQLite verifiziert.
 - Auf ep3o: Postgres + `grocery`-DB + vhost + Platzhalter-Apex live (siehe infra-Repo).
-
-Die API-Endpunkte sind **bewusst minimale Stubs** (list/create/login/…), nur das Gerüst.
 
 ---
 
 ## Was noch zu tun ist (priorisiert)
 
-1. **Alembic-Initialmigration** erzeugen und zur Schema-Wahrheit machen
-   (`uv run alembic revision --autogenerate -m "init"`), danach das `create_all()`
-   in `main.py`s lifespan für Prod entschärfen/gaten (aktuell nur Dev-Komfort).
-2. **Fachlogik aus `PLAN.md` umsetzen** — der eigentliche Kern:
-   - **Produkte**: vollständiges CRUD, Soft-Delete, Lagerort, 3 Tracking-Typen,
-     `min_value`/Status-Schwelle, `step` (±-Schnellbuttons), `full_value`.
-   - **Auto-Einkaufsliste**: Unterschreiten von `min_value` → Auto-Eintrag; Lifecycle
-     `ignored_until_restock` (Snooze bis Wiederauffüllen).
-   - **Einkaufen**: Abhaken (`open`→`inCart`), **Trip abschließen → Archiv**,
-     „Voll"-Wert-Logik anwenden, Farbmarkierungen.
-   - **Resilient-Online**: Listen-Cache + Optimistic-Abhaken + Retry-Queue
-     (bewusst **kein** voller Offline-Sync — siehe PLAN).
-   - **Kategorien/Settings**: CRUD, Nutzer-Farben.
-3. **Frontend-Screens ausbauen**: Produkt-Detail, Kategorie-Gruppierung, Lagerort-Filter,
-   Suche, Knapp-Hervorhebung, Autovervollständigung aus der Produktliste, ±-Buttons.
-4. **Tests** (backend `pytest`, frontend), evtl. simple CI.
-5. **Phase 3 (optional)**: Web-Push, MHD/Haltbarkeit.
+1. **Deploy**: Repo nach ep3o, `.env` füllen (`USER1/2_*`!), `docker compose up -d --build`,
+   TLS-Cert ziehen (siehe „Image bauen & deployen"). CI deployt zudem auto bei Push auf `main`.
+2. **Mehr Tests**: Frontend-Unit-/Component-Tests; backend-Abdeckung erweitern; simple CI.
+3. **Phase 3 (optional)**: Web-Push (VAPID, iOS 16.4+), MHD/Haltbarkeit (`expiry_date`
+   ist im Modell schon vorgesehen), evtl. Voll-Offline.
+
+Erledigt sind damit die früheren Punkte 1–3 (Alembic, Fachlogik, Frontend-Screens).
 
 ---
 
