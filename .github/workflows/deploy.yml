@@ -1,0 +1,38 @@
+name: deploy
+
+# Auto-deploy to ep3o on every push to main: SSH in, pull, rebuild the container.
+# Server IP / user live in repo secrets (this repo is public). The .env on the
+# server holds the secrets and is NOT in git; the deploy step requires it to exist.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+concurrency:
+  group: deploy-main
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to ep3o
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.EP3O_HOST }}
+          username: ${{ secrets.EP3O_USER }}
+          key: ${{ secrets.EP3O_SSH_KEY }}
+          script_stop: true
+          script: |
+            set -e
+            DIR=/opt/grocery_manager
+            cd "$DIR"
+            if [ ! -d .git ]; then
+              git init -q
+              git remote add origin https://github.com/Darquaise/grocery_manager.git
+            fi
+            git fetch --depth 1 origin main
+            git reset --hard origin/main
+            test -f .env || { echo "::error::.env missing in $DIR"; exit 1; }
+            docker compose up -d --build
+            docker image prune -f

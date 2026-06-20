@@ -1,0 +1,12 @@
+@import "tailwindcss";
+
+/* Follow the iOS light/dark mode automatically. */
+:root {
+  color-scheme: light dark;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+}

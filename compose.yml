@@ -1,0 +1,34 @@
+# grocery_manager — one app container: FastAPI serves the built Angular SPA
+# (static) AND the API on one origin (no CORS). Fronted by the shared host nginx
+# on ep3o:  shopping.darquaise.com -> 127.0.0.1:8000.
+#
+# Postgres lives in the main-server-infra repo on the external `shared-db`
+# network; this app joins it and reaches the DB at host "postgres".
+#
+# NOTE: needs a Dockerfile (multi-stage: build Angular -> serve via FastAPI) and
+# the app code before `docker compose up` can build — the app scaffold is the
+# next step (see PLAN.md). Deploy-time `.env` must sit next to this file.
+
+name: grocery-manager
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file: .env
+    environment:
+      # Shared Postgres on the shared-db network (host = service name "postgres").
+      # psycopg v3 driver to match SQLModel/SQLAlchemy 2.
+      DATABASE_URL: postgresql+psycopg://grocery_app:${GROCERY_DB_PASSWORD:?set GROCERY_DB_PASSWORD in .env}@postgres:5432/grocery
+    ports:
+      # Loopback only; host nginx proxies shopping.darquaise.com here.
+      - "127.0.0.1:8000:8000"
+    networks:
+      - shared-db
+    mem_limit: 400m
+    restart: unless-stopped
+
+networks:
+  shared-db:
+    external: true        # created/owned by main-server-infra

@@ -1,4 +1,21 @@
+# Secrets
+*.env
+!.env.example
+
+# Editors / tooling
 /.claude/*
 /.idea/*
+
+# Python
+**/__pycache__/
+*.pyc
+backend/.venv/
 /.venv/*
-*.env
+
+# Frontend (Angular)
+frontend/node_modules/
+frontend/dist/
+frontend/.angular/
+
+# Built SPA (copied into the backend image at build time)
+backend/static/
