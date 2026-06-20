@@ -6,7 +6,7 @@ export function isLow(p: Pick<Product, 'min_value' | 'current_value'>): boolean 
 }
 
 export function statusLabel(value: number): string {
-  return STATUS_LABELS[Math.max(0, Math.min(2, Math.round(value)))];
+  return STATUS_LABELS[Math.max(0, Math.min(STATUS_LABELS.length - 1, Math.round(value)))];
 }
 
 /** Human-readable current stock, per tracking type. */

@@ -9,7 +9,7 @@ def _now() -> datetime:
 
 
 class TrackingType(str, Enum):
-    status = "status"      # ordinal: empty=0, low=1, full=2
+    status = "status"      # ordinal 0..4: empty, low, medium, almost-full, full
     counter = "counter"    # whole number
     amount = "amount"      # value + unit (g/ml/Stück)
 
@@ -47,7 +47,7 @@ class Product(SQLModel, table=True):
 
     tracking_type: TrackingType = TrackingType.status
     # Meaning depends on tracking_type:
-    #   status  -> ordinal (0/1/2),  counter -> whole number,  amount -> value
+    #   status  -> ordinal 0..4,  counter -> whole number,  amount -> value
     current_value: float = 0
     # Threshold for the auto shopping list. For `status` it's the ordinal level
     # (default 1 = "low").

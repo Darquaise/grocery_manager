@@ -39,11 +39,11 @@ interface FormModel {
 
         @switch (form.tracking_type) {
           @case ('status') {
-            <div class="grid grid-cols-3 gap-2">
-              @for (lvl of [2, 1, 0]; track lvl) {
+            <div class="grid grid-cols-5 gap-1">
+              @for (lvl of [4, 3, 2, 1, 0]; track lvl) {
                 <button
                   (click)="setValue(lvl)"
-                  class="rounded-lg border py-2 text-sm"
+                  class="rounded-lg border px-1 py-2 text-xs leading-tight"
                   [class.border-blue-600]="form.current_value === lvl"
                   [class.bg-blue-600]="form.current_value === lvl"
                   [class.text-white]="form.current_value === lvl"
@@ -121,7 +121,9 @@ interface FormModel {
           Anfangsbestand
           @if (form.tracking_type === 'status') {
             <select [(ngModel)]="form.current_value" class="mt-1 w-full rounded-lg border border-gray-300 bg-transparent px-3 py-2 dark:border-neutral-700">
-              <option [ngValue]="2">Voll</option>
+              <option [ngValue]="4">Voll</option>
+              <option [ngValue]="3">Fast voll</option>
+              <option [ngValue]="2">Mittel</option>
               <option [ngValue]="1">Knapp</option>
               <option [ngValue]="0">Leer</option>
             </select>
@@ -132,13 +134,17 @@ interface FormModel {
       }
 
       <label class="block text-sm">
-        Mindestmenge / Schwelle für die Einkaufsliste
+        Auf die Einkaufsliste ab
+        <span class="mt-0.5 block text-xs font-normal opacity-50">
+          Bei diesem Bestand (oder weniger) landet das Produkt automatisch auf der Liste.
+        </span>
         @if (form.tracking_type === 'status') {
           <select [(ngModel)]="form.min_value" class="mt-1 w-full rounded-lg border border-gray-300 bg-transparent px-3 py-2 dark:border-neutral-700">
             <option [ngValue]="null">Nie automatisch</option>
-            <option [ngValue]="2">Bei „Voll"</option>
-            <option [ngValue]="1">Bei „Knapp"</option>
-            <option [ngValue]="0">Bei „Leer"</option>
+            <option [ngValue]="3">Fast voll</option>
+            <option [ngValue]="2">Mittel</option>
+            <option [ngValue]="1">Knapp</option>
+            <option [ngValue]="0">Leer</option>
           </select>
         } @else {
           <input type="number" [(ngModel)]="form.min_value" placeholder="leer = nie automatisch" class="mt-1 w-full rounded-lg border border-gray-300 bg-transparent px-3 py-2 dark:border-neutral-700" />
@@ -204,7 +210,7 @@ export class ProductDetail {
     category_id: null,
     location: '',
     tracking_type: 'status',
-    current_value: 2,
+    current_value: 4,
     min_value: 1,
     step: null,
     full_value: null,

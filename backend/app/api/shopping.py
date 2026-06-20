@@ -20,8 +20,9 @@ from .deps import current_user
 
 router = APIRouter(prefix="/shopping", tags=["shopping"])
 
-# "Full" ordinal for status-tracked products (empty=0, low=1, full=2).
-STATUS_FULL = 2.0
+# "Full" ordinal for status-tracked products (0=empty, 1=low, 2=medium,
+# 3=almost full, 4=full).
+STATUS_FULL = 4.0
 
 
 # ── Active list ───────────────────────────────────────────────────────────────

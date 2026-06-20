@@ -22,9 +22,9 @@ Aufrufbar über eine eigene URL, installierbar auf dem iPhone-Homescreen.
 
 | Bereich                 | Entscheidung                                                                                                                                                                                                      |
 |-------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **Bestandsmodell**      | **Mix je Produkt** – jedes Produkt hat einen Typ: `Status` (Voll/Knapp/Leer), `Zähler` (ganze Zahl) oder `Menge` (Wert + Einheit g/ml/Stück).                                                                     |
+| **Bestandsmodell**      | **Mix je Produkt** – jedes Produkt hat einen Typ: `Status` (Voll/Fast voll/Mittel/Knapp/Leer), `Zähler` (ganze Zahl) oder `Menge` (Wert + Einheit g/ml/Stück).                                                                     |
 | **Mindestmenge**        | Pro Produkt definierbar. Unterschreiten → Produkt landet **automatisch** auf der Einkaufsliste. Zusätzlich **manuelle** Einträge möglich.                                                                         |
-| **Status-Schwelle**     | Bei `Status`-Produkten ist die Auto-Listen-Schwelle **pro Produkt** einstellbar (Standard: `Knapp`). Technisch = `minValue` als Ordinalwert.                                                                       |
+| **Status-Schwelle**     | Bei `Status`-Produkten ist die Auto-Listen-Schwelle **pro Produkt** einstellbar (Standard: `Knapp`). Technisch = `minValue` als Ordinalwert; „Voll" ist als Schwelle nicht wählbar (läge sonst immer auf der Liste).                                                                       |
 | **Verbrauchen**         | Produkt **öffnen → Bestand im Detail anpassen** (Status runter / Zähler −1 / Menge −Schritt). Bewusst gegen Versehen.                                                                                             |
 | **Mengen-Anpassung**    | Beim `Menge`-Typ: **Schnell-Buttons** (±Schrittgröße, pro Produkt definierbar) **plus** freie Eingabe des exakten Restwerts.                                                                                      |
 | **Einkaufsliste**       | Aktive, geteilte Liste. Auto-Einträge zeigen **nur den Namen** (keine Menge). Manuelle Einträge dürfen eine Menge/Notiz tragen. **Freie Einträge** (Einmalkäufe ohne Bestandsführung, z. B. „Grillkohle") erlaubt. |
@@ -54,7 +54,7 @@ Aufrufbar über eine eigene URL, installierbar auf dem iPhone-Homescreen.
 - `id`, `name`, `categoryId`, `location` (optional, z. B. Kühlschrank/Vorratsschrank/Tiefkühler)
 - `trackingType`: `status` | `counter` | `amount`
 - `currentValue` – Bedeutung je Typ:
-  - `status`: Ordinalwert (leer=0, knapp=1, voll=2)
+  - `status`: Ordinalwert (leer=0, knapp=1, mittel=2, fast voll=3, voll=4)
   - `counter`: ganze Zahl
   - `amount`: Zahl + `unit` (z. B. g/ml/Stück)
 - `minValue` – Mindestmenge / Schwelle für Auto-Einkaufsliste. Bei `status` = Ordinalwert (Standard 1 = „Knapp").

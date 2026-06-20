@@ -31,6 +31,16 @@ def test_status_crosses_threshold(auth_client, make_product):
     assert names(auth_client) == []
 
 
+def test_status_threshold_at_medium_level(auth_client, make_product):
+    # 5-level status (empty=0 … full=4); threshold "Mittel" (2).
+    p = make_product(name="Shampoo", tracking_type="status", current_value=4, min_value=2)
+    assert names(auth_client) == []  # voll
+    auth_client.post(f"/api/products/{p['id']}/adjust", json={"current_value": 3})
+    assert names(auth_client) == []  # fast voll -> noch über der Schwelle
+    auth_client.post(f"/api/products/{p['id']}/adjust", json={"current_value": 2})
+    assert names(auth_client) == ["Shampoo"]  # mittel = Schwelle -> auf die Liste (<=)
+
+
 def test_created_below_min_lists_immediately(auth_client, make_product):
     make_product(name="Mehl", tracking_type="counter", current_value=0, min_value=1)
     assert names(auth_client) == ["Mehl"]

@@ -74,5 +74,5 @@ export interface Trip {
   items: TripItem[];
 }
 
-/** Ordinal status levels (for `status`-tracked products). */
-export const STATUS_LABELS = ['Leer', 'Knapp', 'Voll'] as const;
+/** Ordinal status levels (for `status`-tracked products), index = value 0..4. */
+export const STATUS_LABELS = ['Leer', 'Knapp', 'Mittel', 'Fast voll', 'Voll'] as const;

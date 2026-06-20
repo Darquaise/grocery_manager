@@ -27,8 +27,8 @@ def test_complete_applies_full_value_and_archives(auth_client, make_product):
     assert trip["completed_by"] is not None
     assert sorted(i["display_name"] for i in trip["items"]) == ["Brot", "Reis", "Spüli"]
 
-    # Full-value logic applied.
-    assert auth_client.get(f"/api/products/{status_p['id']}").json()["current_value"] == 2
+    # Full-value logic applied (status -> full = ordinal 4).
+    assert auth_client.get(f"/api/products/{status_p['id']}").json()["current_value"] == 4
     assert auth_client.get(f"/api/products/{amount_p['id']}").json()["current_value"] == 1000
 
     # Bought entries cleared from the active list; refilled products dropped off.
