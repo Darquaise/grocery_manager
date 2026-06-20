@@ -8,20 +8,27 @@ Private, mobile-first **PWA** für genau 2 Personen, um Küchen-Verbrauchsmateri
 - **Server-/Infrastruktur:** Schwester-Repo [`../main-server-infra`](../main-server-infra) (geteilte Postgres, nginx, TLS) — **bereits live** auf ep3o.
 
 > **Stand: 2026-06-20** — **Phase 1 + 2 aus `PLAN.md` umgesetzt** und end-to-end
-> verifiziert (Backend-`pytest` 23 grün, Angular-Prod-Build grün, Docker-Container-
+> verifiziert (Backend-`pytest` 27 grün, Angular-Prod-Build grün, Docker-Container-
 > Smoke-Test grün inkl. Login → Auto-Einkaufsliste → Trip-Abschluss → Archiv).
+> Dazu eine **Mobile-/PWA-Ausbaurunde**: Lagerorte als verwaltete Liste (wie Kategorien),
+> überarbeitete Einstellungen (einklappbar, Drag-Sortierung, ein Speichern-Knopf),
+> iPhone-taugliche Bottom-Nav und **automatischer Update-Reload** des Service Workers.
+> Alembic ist jetzt auch **lokal** das Schema-Werkzeug (kein `create_all` mehr im Dev-Stack).
+> Außerdem **Offline-Ausbau umgesetzt**: Offline-Lesen (IndexedDB, cache-first) + gepufferte
+> Writes (Outbox) + 5-s-Live-Einkaufsliste + offline-toleranter Login + Konflikt-Dialog.
 > Offen bleibt nur noch die **optionale Phase 3** (Web-Push, MHD) und mehr Tests/CI.
+> Den feinen Umsetzungsstand führt die Tabelle ganz unten.
 
 ---
 
 ## Tech-Stack
 
-| Schicht | Wahl |
-|---|---|
-| Backend | **Python 3.14 · FastAPI · SQLModel · Alembic** (Paketmanager **uv**) |
-| Auth | argon2-Hash, httpOnly **Session-Cookie** (Starlette `SessionMiddleware`) |
-| Frontend | **Angular 20** (standalone + signals) · **Tailwind v4** · **PWA** (Service Worker) |
-| DB | **PostgreSQL** (geteilte Instanz auf ep3o, DB `grocery`) |
+| Schicht      | Wahl                                                                                                           |
+|--------------|----------------------------------------------------------------------------------------------------------------|
+| Backend      | **Python 3.14 · FastAPI · SQLModel · Alembic** (Paketmanager **uv**)                                           |
+| Auth         | argon2-Hash, httpOnly **Session-Cookie** (Starlette `SessionMiddleware`)                                       |
+| Frontend     | **Angular 20** (standalone + signals) · **Tailwind v4** · **PWA** (Service Worker)                             |
+| DB           | **PostgreSQL** (geteilte Instanz auf ep3o, DB `grocery`)                                                       |
 | Auslieferung | **ein Container**: FastAPI liefert API **und** das gebaute Angular (`/app/static`) aus → ein Origin, kein CORS |
 
 Bewusste Architektur-Entscheidungen (Warum) stehen in `PLAN.md` §5. Kurzfassung:
@@ -62,20 +69,23 @@ grocery_manager/
 ├─ .env / .env.example     # .env ist gitignored (Secrets)
 ├─ backend/
 │  ├─ pyproject.toml · uv.lock · .python-version
-│  ├─ alembic.ini · migrations/        # Alembic (noch keine Revision generiert)
+│  ├─ alembic.ini · migrations/versions/  # Alembic: init + managed_locations
 │  └─ app/
-│     ├─ main.py           # FastAPI-App, SPA-Mount + SPA-Fallback, lifespan(create_all+seed)
+│     ├─ main.py           # FastAPI-App, SPA-Mount + SPA-Fallback, lifespan(seed; create_all nur Dev-Notnagel)
 │     ├─ config.py         # pydantic-settings (DATABASE_URL, SESSION_SECRET, USER1/2_*)
-│     ├─ db.py · models.py · security.py · seed.py
-│     └─ api/{auth,categories,products,shopping}.py
+│     ├─ db.py · models.py · security.py · seed.py · shopping_logic.py
+│     └─ api/{auth,users,categories,locations,products,shopping}.py
 └─ frontend/               # Angular-Workspace (ng new)
    ├─ proxy.conf.json      # ng serve: /api → http://localhost:8000
    └─ src/app/
-      ├─ app.{ts,html}     # Shell mit Bottom-Nav (Bestand/Einkauf/Archiv/Mehr)
+      ├─ app.{ts,html}     # Shell mit Bottom-Nav (Bestand/Einkauf/Archiv/Mehr) + SwUpdate-Auto-Reload
       ├─ app.routes.ts · app.config.ts
-      ├─ services/auth.ts  # Session-Cookie, currentUser-Signal
+      ├─ services/          # auth, users, categories, locations, products, shopping,
+      │                     #   offline-db (IndexedDB), connectivity, sync (Outbox/Konflikte)
+      ├─ interceptors/connectivity-interceptor.ts  # Online-Erkennung über Request-Erfolg
+      ├─ components/{editable-list,conflict-dialog}.ts
       ├─ guards/auth-guard.ts
-      └─ pages/{login,inventory,shopping,archive,settings}/
+      └─ pages/{login,inventory,product-detail,shopping,archive,settings}/
 ```
 
 ---
@@ -98,7 +108,10 @@ berührt):
 Die lokale DB läuft via `compose.dev.yml` (eigener Compose-Stack `grocery-dev`,
 isoliert von Prod) und **persistiert über Stop/Restart** in einem Docker-Volume.
 Nur `dev-reset.sh` löscht die Daten. Das Start-Skript erzwingt `DATABASE_URL` auf
-die lokale DB und legt das Schema per `create_all` an (kein Alembic-Schritt nötig).
+die lokale DB und fährt **`alembic upgrade head`** (wie Produktiv, `DB_AUTO_CREATE=false`)
+→ Schema-Änderungen kommen **inkrementell, ohne Reset** an. Workflow bei Modell-
+Änderungen: `cd backend && uv run alembic revision --autogenerate -m "…"`, die erzeugte
+Datei prüfen, dann `dev-restart.sh` (oder direkt `uv run alembic upgrade head`).
 Logs: `.dev/*.log`.
 
 **Manuell (Alternative, zwei Terminals):** braucht eine erreichbare Postgres unter
@@ -145,20 +158,57 @@ müssen identisch sein. **Nicht** ins Git.
     → Auto-Eintrag; Snooze-Lifecycle (`ignored_until_restock`) bis Wiederauffüllen.
   - **Einkaufen**: Abhaken (`open`↔`inCart`), Auto-Snooze beim Wegwischen,
     **Trip abschließen → Archiv** mit „Voll"-Wert-Logik + optionalem Gesamtpreis.
-  - **Kategorien**: CRUD (Delete setzt Produkt-Kategorie auf `null`). **Users**: Liste
-    + eigene Farbe. Geprüft: `ruff` + **`pytest` (23 Tests grün)**.
-- **Alembic**: Initialmigration `migrations/versions/*_init.py` ist die Schema-Wahrheit;
-  Container fährt beim Start `alembic upgrade head` (compose: `DB_AUTO_CREATE=false`),
-  lokal bleibt `create_all` als Dev-Komfort (`DB_AUTO_CREATE=true`, Default).
-- **Frontend** (Angular-Prod-Build grün): App-Shell + Bottom-Nav, `authGuard`, Login,
+  - **Kategorien & Lagerorte**: je CRUD mit `sort_order` (Delete setzt das jeweilige
+    Feld am Produkt auf `null`). Lagerorte sind jetzt eine **verwaltete Entität** (vorher
+    Freitext am Produkt). **Users**: Liste + eigene Farbe. Geprüft: `ruff` +
+    **`pytest` (27 Tests grün)**.
+- **Alembic** ist die Schema-Wahrheit (`init` + `managed_locations`, inkl. Daten-Migration
+  alter Freitext-Lagerorte). **Container und lokaler Dev-Stack** fahren beim Start
+  `alembic upgrade head` (`DB_AUTO_CREATE=false`); `create_all` bleibt nur Notnagel/Default
+  für schnelle Wegwerf-DBs (z. B. Tests).
+- **Frontend** (Angular-Prod-Build grün): App-Shell + **Bottom-Nav** (höher, iPhone-
+  Safe-Area, aktiver Bereich per Akzentbalken markiert), `authGuard`, Login,
   **Bestand** (Kategorie-Gruppierung, Lagerort-Filter, Suche, Knapp-Markierung),
-  **Produkt-Detail** (anlegen/bearbeiten/±-Buttons/„Voll"/Soft-Delete), **Einkaufsliste**
-  (Optimistic-Abhaken + Retry-Queue + localStorage-Cache, Autovervollständigung,
-  Farbmarkierung, Trip-Abschluss), **Archiv**, **Einstellungen** (Kategorien-CRUD,
-  Nutzerfarben, Logout). PWA: Service Worker, Manifest + Icons (neu generiert).
+  **Produkt-Detail** (anlegen/bearbeiten/±-Buttons/„Voll"/Soft-Delete, Kategorie- und
+  Lagerort-Dropdown), **Einkaufsliste** (Optimistic-Abhaken + Retry-Queue +
+  localStorage-Cache, Autovervollständigung, Farbmarkierung, Trip-Abschluss), **Archiv**,
+  **Einstellungen** (einklappbare, per Drag (`@angular/cdk`) sortierbare Verwaltungslisten
+  für **Kategorien & Lagerorte** mit einem Speichern-Knopf, Nutzerfarben, Logout). PWA:
+  Service Worker + **automatischer Update-Reload** via `SwUpdate`, Manifest + Icons.
+- **Offline & Caching**: IndexedDB-Cache (cache-first / stale-while-revalidate) für Bestand
+  + Einkaufsliste, **Outbox** für Offline-Writes (Abhaken/Hinzufügen/Entfernen + Bestand
+  ändern) mit Sync bei Start/Reconnect/Fokus/manuell, **5-s-Polling** der Einkaufsliste,
+  offline-toleranter `authGuard`, **Konflikt-Dialog** (Optimistic Concurrency, 409). Offline-
+  Icon + „ausstehend"-Marker. Frontend-Build grün; Browser-Offline-Verhalten manuell zu testen.
 - **Docker**: kombiniertes Image baut; Container-Smoke-Test grün — SPA + Deep-Links
   + ganzer API-Fluss (Login → Auto-Liste → Trip → Archiv) gegen SQLite verifiziert.
 - Auf ep3o: Postgres + `grocery`-DB + vhost + Platzhalter-Apex live (siehe infra-Repo).
+
+---
+
+## Offline & Caching (umgesetzt)
+
+Verfeinert „Resilient-Online" zu **Lesen überall offline + gepufferte Writes**; volle
+Spezifikation in [`PLAN.md`](./PLAN.md) §6. Kurzfassung:
+
+- **Offline lesbar:** Einkaufsliste, Bestand. **Offline schreibbar:** Abhaken/Hinzufügen/
+  Entfernen (Liste) + Bestand ändern (Outbox, später synchronisiert). **Nicht** offline:
+  Verwaltung + Archiv.
+- **IndexedDB** als lokaler Store (Cache je Datentyp + Outbox mit Basis-`updated_at`),
+  **stale-while-revalidate**, Prefetch bei Login, Refresh bei App-Fokus/Reconnect.
+- **Einkaufsliste pollt alle 5 s** (online + Screen sichtbar) → quasi-live beim gemeinsamen Einkaufen.
+- **Konflikte:** Optimistic Concurrency (`expected_updated_at` → 409); gleicher Endwert =
+  stilles Verwerfen, echter Konflikt = Dialog „deine vs. ihre". Kleine Backend-Ergänzung.
+- **Auth offline:** `authGuard` lässt mit gecachtem Nutzer durch und prüft `me` im Hintergrund.
+- **Status dezent:** Offline-Icon in der Nav + „ausstehend"-Marker; aktiv nur Konflikt/Fehler.
+
+**Stand:** umgesetzt. Neue Bausteine: `services/offline-db` (IndexedDB-Cache + Outbox),
+`services/connectivity` + `interceptors/connectivity-interceptor` (Online-Erkennung über
+Request-Erfolg), `services/sync` (Outbox-Replay, Konflikte, Trigger), `components/conflict-dialog`.
+Lese-Services laden cache-first; `authGuard` ist offline-tolerant; Backend-`adjust` macht
+Optimistic Concurrency (`expected_updated_at` → 409, Test vorhanden). Der Service Worker cached
+weiterhin nur App-Shell/Assets — `/api` läuft über IndexedDB. **Noch offen:** Browser-Offline
+manuell prüfen (DevTools „Offline" / installierte iOS-PWA).
 
 ---
 
@@ -176,13 +226,14 @@ Erledigt sind damit die früheren Punkte 1–3 (Alembic, Fachlogik, Frontend-Scr
 
 ## Meine Gedanken / Hinweise für den nächsten Durchgang
 
-- **Das hier ist ein Skelett, kein MVP.** Routing, Auth, DB-Anbindung, Build und Deploy
-  stehen und sind getestet — aber die Bestands-/Einkaufslisten-Logik (der Sinn der App)
-  fehlt noch fast komplett. Nächster sinnvoller Brocken: **Produkte-CRUD + Produkt-Detail
-  end-to-end** (Backend-Endpunkte sind schon da), dann **Auto-Einkaufsliste**.
-- **create_all vs. Alembic:** Solange noch keine Migration existiert, legt die App die
-  Tabellen beim Start selbst an (`create_all`). Das ist praktisch fürs Hacken, aber für
-  Prod soll **Alembic** die Wahrheit sein — Migration zuerst erzeugen, dann umstellen.
+- **Funktional vollständiger MVP+ (Phase 1 + 2).** Bestand, Produkt-Detail, Auto-
+  Einkaufsliste inkl. Snooze, Trip/Archiv und die Verwaltung (Kategorien/Lagerorte/
+  Farben) sind end-to-end umgesetzt und getestet. Größter offener Brocken: **Deploy des
+  Containers auf ep3o** + mehr automatisierte Tests/CI.
+- **Alembic überall:** Schema-Änderungen laufen jetzt lokal **und** in Prod über
+  `alembic upgrade head` (Dev-Stack inklusive). Modelländerung ⇒ **immer** eine Migration
+  erzeugen (`alembic revision --autogenerate`) und prüfen; `create_all` ist nur noch
+  Notnagel und sollte nicht als Schema-Wahrheit dienen.
 - **SPA-Fallback-Falle (gelöst, nicht wieder einbauen):** Starlettes `StaticFiles` *wirft*
   bei 404 eine `HTTPException`, statt eine Response mit Status 404 zu liefern. Der Fallback
   in `main.py` fängt die Exception ab — beim Refactoring nicht auf `status_code` zurückfallen.
@@ -203,3 +254,34 @@ Erledigt sind damit die früheren Punkte 1–3 (Alembic, Fachlogik, Frontend-Scr
 
 - [`PLAN.md`](./PLAN.md) — Produktkonzept (maßgeblich für die Fachlogik).
 - [`../main-server-infra`](../main-server-infra) — geteilte Postgres, nginx, TLS, Backups (live).
+
+---
+
+## Umsetzungsstand der Anforderungen
+
+Legende: ✅ umgesetzt · 🟡 teilweise/vorbereitet · ⬜️ offen.
+
+| Anforderung (aus `PLAN.md` + Nacharbeiten)                                         | Status | Detailgrad / Anmerkung                                                                                      |
+|------------------------------------------------------------------------------------|--------|-------------------------------------------------------------------------------------------------------------|
+| Bestandsmodell mit 3 Typen (`status`/`counter`/`amount`)                           | ✅      | Backend + UI, alle Typen inkl. Einheit                                                                      |
+| Mindestmenge / Status-Schwelle pro Produkt                                         | ✅      | `min_value`, Status als Ordinalwert                                                                         |
+| Verbrauchen/Auffüllen im Detail (Schnell-Buttons + exakter Wert)                   | ✅      | inkl. „Voll auffüllen"                                                                                      |
+| Auto-Einkaufsliste + Snooze bis Wiederauffüllen                                    | ✅      | `shopping_logic.py`, `ignored_until_restock`                                                                |
+| Manuelle + freie Einträge (Menge/Notiz, Farbmarkierung)                            | ✅      | Autovervollständigung vorhanden                                                                             |
+| Im Laden abhaken (Optimistic UI + Retry)                                           | ✅      | resilient-online, localStorage-Cache                                                                        |
+| „Voll"-Wert-Logik beim Kauf-Abschluss                                              | ✅      | Status→Voll, optionaler Voll-Wert                                                                           |
+| Übersicht: Kategorie-Gruppierung, Lagerort-Filter, Suche, Knapp-Markierung         | ✅      | —                                                                                                           |
+| Kategorien (Standard + eigene) verwalten                                           | ✅      | CRUD + Drag-Sortierung in Einstellungen                                                                     |
+| **Lagerorte verwalten (wie Kategorien)**                                           | ✅      | **neu:** eigene Entität + CRUD + Sortierung, Produkt-Dropdown                                               |
+| Login (2 Seed-Accounts, Farben)                                                    | ✅      | argon2, httpOnly-Session-Cookie                                                                             |
+| Wer-hat-was Farbmarkierung                                                         | 🟡     | an Listeneinträgen/Detail; Platzierung pragmatisch                                                          |
+| Einkauf abschließen → Archiv (+ optional Gesamtpreis)                              | ✅      | Trip-Snapshot                                                                                               |
+| Optik hell/clean, folgt iOS Dark/Light                                             | ✅      | Tailwind v4, `color-scheme`                                                                                 |
+| **Einstellungen aufgeräumt** (einklappbar, Drag-Sortierung, Speichern unter Liste) | ✅      | **neu:** wiederverwendbare `editable-list`-Komponente                                                       |
+| **Bottom-Nav** höher/iPhone-Safe-Area, aktiver Bereich erkennbar, Zahnrad-Icon     | ✅      | **neu:** Akzentbalken + Heroicons-Cog                                                                       |
+| **PWA-Update-Check / Reload bei neuer Version**                                    | ✅      | **neu:** `SwUpdate`, Auto-Reload + Re-Check bei App-Fokus                                                   |
+| **Alembic auch lokal** (Schemaänderung ohne DB-Reset)                              | ✅      | **neu:** Dev-Stack fährt `alembic upgrade head`                                                             |
+| MHD / Haltbarkeit                                                                  | 🟡     | Feld `expiry_date` im Modell, noch ohne UI (Phase 3)                                                        |
+| Web-Push-Benachrichtigungen                                                        | ⬜️     | Phase 3 (VAPID, iOS 16.4+)                                                                                  |
+| Offline: Lesen überall + gepufferte Writes + Konflikt-Dialog                       | ✅      | IndexedDB-Cache, Outbox, 5-s-Polling, authGuard-Fix, 409-Konflikt-Dialog; Browser-Offline manuell zu testen |
+| Tests / CI                                                                         | 🟡     | Backend: 27 `pytest` grün; Frontend-Tests + CI offen                                                        |

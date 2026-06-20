@@ -3,13 +3,24 @@ import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 
 import { Location } from '../models';
+import { OfflineDbService } from './offline-db';
+
+const CACHE_KEY = 'locations';
 
 @Injectable({ providedIn: 'root' })
 export class LocationsService {
   private http = inject(HttpClient);
+  private db = inject(OfflineDbService);
 
-  list(): Promise<Location[]> {
-    return firstValueFrom(this.http.get<Location[]>('/api/locations'));
+  async list(): Promise<Location[]> {
+    const items = await firstValueFrom(this.http.get<Location[]>('/api/locations'));
+    void this.db.setCache(CACHE_KEY, items);
+    return items;
+  }
+
+  /** Last cached list for instant/offline rendering (null if never fetched). */
+  async cached(): Promise<Location[] | null> {
+    return (await this.db.getCache<Location[]>(CACHE_KEY))?.data ?? null;
   }
 
   create(name: string, sortOrder = 0): Promise<Location> {

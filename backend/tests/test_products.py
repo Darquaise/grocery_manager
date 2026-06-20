@@ -27,6 +27,31 @@ def test_adjust_changes_value(auth_client, make_product):
     assert resp.json()["current_value"] == 4
 
 
+def test_adjust_optimistic_concurrency(auth_client, make_product):
+    p = make_product(name="Mehl", tracking_type="counter", current_value=10)
+    seen = p["updated_at"]
+
+    # A concurrent change moves updated_at forward.
+    bumped = auth_client.post(f"/api/products/{p['id']}/adjust", json={"current_value": 7}).json()
+    assert bumped["updated_at"] != seen
+
+    # Adjusting against the stale timestamp is rejected with the current state.
+    stale = auth_client.post(
+        f"/api/products/{p['id']}/adjust",
+        json={"current_value": 3, "expected_updated_at": seen},
+    )
+    assert stale.status_code == 409
+    assert stale.json()["detail"]["current_value"] == 7
+
+    # Adjusting against the current timestamp succeeds.
+    ok = auth_client.post(
+        f"/api/products/{p['id']}/adjust",
+        json={"current_value": 3, "expected_updated_at": bumped["updated_at"]},
+    )
+    assert ok.status_code == 200
+    assert ok.json()["current_value"] == 3
+
+
 def test_soft_delete_and_restore(auth_client, make_product):
     p = make_product(name="Butter")
     pid = p["id"]

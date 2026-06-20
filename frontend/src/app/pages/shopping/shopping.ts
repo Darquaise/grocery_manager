@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, OnDestroy, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 
@@ -6,6 +6,8 @@ import { Product, ShoppingItem } from '../../models';
 import { ShoppingService } from '../../services/shopping';
 import { ProductsService } from '../../services/products';
 import { UsersService } from '../../services/users';
+import { ConnectivityService } from '../../services/connectivity';
+import { SyncService } from '../../services/sync';
 
 @Component({
   selector: 'app-shopping',
@@ -63,6 +65,10 @@ import { UsersService } from '../../services/users';
               <span class="h-2.5 w-2.5 shrink-0 rounded-full" [style.background-color]="users.colorOf(item.added_by)"></span>
             }
 
+            @if (isPending(item)) {
+              <span class="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400" title="wird synchronisiert"></span>
+            }
+
             <span class="flex-1" [class.line-through]="item.state === 'inCart'" [class.opacity-50]="item.state === 'inCart'">
               {{ item.display_name }}
               @if (item.amount_text) {
@@ -100,10 +106,12 @@ import { UsersService } from '../../services/users';
     }
   `,
 })
-export class Shopping {
+export class Shopping implements OnDestroy {
   protected shopping = inject(ShoppingService);
   protected users = inject(UsersService);
   private productsSvc = inject(ProductsService);
+  private connectivity = inject(ConnectivityService);
+  private sync = inject(SyncService);
   private router = inject(Router);
 
   readonly products = signal<Product[]>([]);
@@ -113,9 +121,30 @@ export class Shopping {
   readonly busy = signal(false);
   totalPrice: number | null = null;
 
+  // Shared list: while this screen is open + online, refresh every 5 s so both
+  // shoppers see what the other has already grabbed.
+  private poll = setInterval(() => {
+    if (document.visibilityState === 'visible' && this.connectivity.online()) {
+      void this.shopping.load();
+    }
+  }, 5000);
+
   constructor() {
     void this.shopping.load();
-    void this.productsSvc.list().then((p) => this.products.set(p));
+    void this.productsSvc.cached().then((p) => p && this.products.set(p));
+    void this.productsSvc
+      .list()
+      .then((p) => this.products.set(p))
+      .catch(() => undefined);
+  }
+
+  ngOnDestroy(): void {
+    clearInterval(this.poll);
+  }
+
+  /** Has unsynced changes (offline-added temp item or a queued toggle/remove)? */
+  isPending(item: ShoppingItem): boolean {
+    return item.id < 0 || this.sync.pendingShoppingIds().has(item.id);
   }
 
   async add(): Promise<void> {
@@ -142,6 +171,8 @@ export class Shopping {
       this.completing.set(false);
       this.totalPrice = null;
       await this.router.navigateByUrl('/archive');
+    } catch {
+      // Trip-Abschluss braucht Netz — offline bleibt die Liste einfach bestehen.
     } finally {
       this.busy.set(false);
     }

@@ -67,7 +67,7 @@ export class Settings {
 
   async changeColor(color: string): Promise<void> {
     const user: User = await this.users.updateMyColor(color);
-    this.auth.user.set(user);
+    this.auth.setUser(user);
   }
 
   async logout(): Promise<void> {

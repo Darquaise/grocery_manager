@@ -6,6 +6,8 @@ import { Category, Location, Product, ProductInput, TrackingType } from '../../m
 import { ProductsService } from '../../services/products';
 import { CategoriesService } from '../../services/categories';
 import { LocationsService } from '../../services/locations';
+import { ConnectivityService } from '../../services/connectivity';
+import { SyncService } from '../../services/sync';
 import { statusLabel } from '../../util/format';
 
 interface FormModel {
@@ -202,10 +204,14 @@ export class ProductDetail {
   private products = inject(ProductsService);
   private categoriesSvc = inject(CategoriesService);
   private locationsSvc = inject(LocationsService);
+  private connectivity = inject(ConnectivityService);
+  private sync = inject(SyncService);
 
   readonly status = statusLabel;
 
   private id: number | null = null;
+  /** Server `updated_at` last seen — base for offline conflict detection. */
+  private baseUpdatedAt: string | null = null;
   readonly isNew = signal(true);
   readonly categories = signal<Category[]>([]);
   readonly locations = signal<Location[]>([]);
@@ -229,8 +235,11 @@ export class ProductDetail {
   readonly stepSize = computed(() => this.form.step && this.form.step > 0 ? this.form.step : 1);
 
   constructor() {
-    void this.categoriesSvc.list().then((c) => this.categories.set(c));
-    void this.locationsSvc.list().then((l) => this.locations.set(l));
+    // Cache-first for the dropdowns so they work offline too.
+    void this.categoriesSvc.cached().then((c) => c && this.categories.set(c));
+    void this.locationsSvc.cached().then((l) => l && this.locations.set(l));
+    void this.categoriesSvc.list().then((c) => this.categories.set(c)).catch(() => undefined);
+    void this.locationsSvc.list().then((l) => this.locations.set(l)).catch(() => undefined);
     const param = this.route.snapshot.paramMap.get('id');
     if (param && param !== 'new') {
       this.id = Number(param);
@@ -240,11 +249,17 @@ export class ProductDetail {
   }
 
   private async loadProduct(): Promise<void> {
-    const p = await this.products.get(this.id!);
-    this.applyProduct(p);
+    const cached = await this.products.cachedOne(this.id!);
+    if (cached) this.applyProduct(cached);
+    try {
+      this.applyProduct(await this.products.get(this.id!));
+    } catch {
+      // offline — keep the cached product if we had one
+    }
   }
 
   private applyProduct(p: Product): void {
+    this.baseUpdatedAt = p.updated_at;
     this.form = {
       name: p.name,
       category_id: p.category_id,
@@ -261,9 +276,18 @@ export class ProductDetail {
 
   // ── stock adjustments (existing products) ─────────────────────────────────
 
+  /** Optimistic stock change: update UI + cache, queue it, flush. Works offline;
+   * a base `updated_at` is attached only when offline so concurrent edits can be
+   * detected on sync (online changes apply directly, last-write-wins). */
   async setValue(value: number): Promise<void> {
-    const updated = await this.products.adjust(this.id!, value);
-    this.form.current_value = updated.current_value;
+    this.form.current_value = value;
+    void this.products.patchCached(this.id!, { current_value: value });
+    await this.sync.enqueue({
+      type: 'product.adjust',
+      payload: { productId: this.id!, currentValue: value },
+      baseUpdatedAt: this.connectivity.online() ? null : this.baseUpdatedAt,
+    });
+    void this.sync.flush();
   }
 
   adjustBy(delta: number): void {

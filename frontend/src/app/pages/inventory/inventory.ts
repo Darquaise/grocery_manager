@@ -144,6 +144,18 @@ export class Inventory {
   }
 
   private async load(): Promise<void> {
+    // 1) Instant render from cache (offline-friendly, stale-while-revalidate).
+    const [cp, cc, cl] = await Promise.all([
+      this.products.cached(),
+      this.categories.cached(),
+      this.locationsSvc.cached(),
+    ]);
+    if (cp) this.items.set(cp);
+    if (cc) this.cats.set(cc);
+    if (cl) this.locs.set(cl);
+    if (cp || cc || cl) this.loading.set(false);
+
+    // 2) Revalidate from the server; offline we just keep the cache.
     try {
       const [products, categories, locations] = await Promise.all([
         this.products.list(),
@@ -153,6 +165,8 @@ export class Inventory {
       this.items.set(products);
       this.cats.set(categories);
       this.locs.set(locations);
+    } catch {
+      // offline / server unreachable — cached data stays on screen
     } finally {
       this.loading.set(false);
     }

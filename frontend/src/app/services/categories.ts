@@ -3,13 +3,24 @@ import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 
 import { Category } from '../models';
+import { OfflineDbService } from './offline-db';
+
+const CACHE_KEY = 'categories';
 
 @Injectable({ providedIn: 'root' })
 export class CategoriesService {
   private http = inject(HttpClient);
+  private db = inject(OfflineDbService);
 
-  list(): Promise<Category[]> {
-    return firstValueFrom(this.http.get<Category[]>('/api/categories'));
+  async list(): Promise<Category[]> {
+    const items = await firstValueFrom(this.http.get<Category[]>('/api/categories'));
+    void this.db.setCache(CACHE_KEY, items);
+    return items;
+  }
+
+  /** Last cached list for instant/offline rendering (null if never fetched). */
+  async cached(): Promise<Category[] | null> {
+    return (await this.db.getCache<Category[]>(CACHE_KEY))?.data ?? null;
   }
 
   create(name: string, sortOrder = 0): Promise<Category> {

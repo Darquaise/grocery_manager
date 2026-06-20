@@ -6,16 +6,21 @@ import { filter } from 'rxjs';
 import { AuthService } from './services/auth';
 import { UsersService } from './services/users';
 import { ShoppingService } from './services/shopping';
+import { ConnectivityService } from './services/connectivity';
+import { SyncService } from './services/sync';
+import { ConflictDialog } from './components/conflict-dialog';
 
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, ConflictDialog],
   templateUrl: './app.html',
 })
 export class App {
   private router = inject(Router);
   protected auth = inject(AuthService);
   protected shopping = inject(ShoppingService);
+  protected connectivity = inject(ConnectivityService);
+  protected sync = inject(SyncService);
   private users = inject(UsersService);
   private swUpdate = inject(SwUpdate);
 

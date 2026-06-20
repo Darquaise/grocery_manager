@@ -3,14 +3,41 @@ import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 
 import { Product, ProductInput } from '../models';
+import { OfflineDbService } from './offline-db';
+
+const CACHE_KEY = 'products';
 
 @Injectable({ providedIn: 'root' })
 export class ProductsService {
   private http = inject(HttpClient);
+  private db = inject(OfflineDbService);
 
-  list(includeDeleted = false): Promise<Product[]> {
+  async list(includeDeleted = false): Promise<Product[]> {
     const url = includeDeleted ? '/api/products?include_deleted=true' : '/api/products';
-    return firstValueFrom(this.http.get<Product[]>(url));
+    const items = await firstValueFrom(this.http.get<Product[]>(url));
+    if (!includeDeleted) void this.db.setCache(CACHE_KEY, items);
+    return items;
+  }
+
+  /** Last cached active list for instant/offline rendering (null if never fetched). */
+  async cached(): Promise<Product[] | null> {
+    return (await this.db.getCache<Product[]>(CACHE_KEY))?.data ?? null;
+  }
+
+  /** A single product from the cached list (for offline product-detail). */
+  async cachedOne(id: number): Promise<Product | null> {
+    const entry = await this.db.getCache<Product[]>(CACHE_KEY);
+    return entry?.data.find((p) => p.id === id) ?? null;
+  }
+
+  /** Optimistically patch the cached list (e.g. a stock change made offline). */
+  async patchCached(id: number, partial: Partial<Product>): Promise<void> {
+    const entry = await this.db.getCache<Product[]>(CACHE_KEY);
+    if (!entry) return;
+    await this.db.setCache(
+      CACHE_KEY,
+      entry.data.map((p) => (p.id === id ? { ...p, ...partial } : p)),
+    );
   }
 
   get(id: number): Promise<Product> {

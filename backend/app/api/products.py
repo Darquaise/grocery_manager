@@ -1,6 +1,7 @@
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
@@ -42,6 +43,10 @@ class ProductUpdate(BaseModel):
 
 class AdjustIn(BaseModel):
     current_value: float
+    # Optimistic concurrency: the `updated_at` the client last saw. If the
+    # server moved on since (a concurrent change), we reject with 409 instead of
+    # silently overwriting. Omitted/None = no check (last-write-wins).
+    expected_updated_at: datetime | None = None
 
 
 def _touch(product: Product, user: User) -> None:
@@ -121,6 +126,9 @@ def adjust_product(
     """Consume/refill: set the new current value. Crossing the min threshold
     adds or clears the product's auto shopping-list entry."""
     product = _get_active(session, product_id)
+    if data.expected_updated_at is not None and product.updated_at != data.expected_updated_at:
+        # Concurrent change since the client last read it → let the client decide.
+        raise HTTPException(status.HTTP_409_CONFLICT, detail=jsonable_encoder(product))
     product.current_value = data.current_value
     _touch(product, user)
     session.add(product)

@@ -22,3 +22,4 @@ backend/static/
 
 # Local dev runtime (PID files + logs from scripts/dev-*.sh)
 /.dev/
+todo.txt

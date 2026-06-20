@@ -57,13 +57,19 @@ start_bg() {  # name workdir command...
   echo "  $name → PID $!  ·  Log: ${logfile#$ROOT/}"
 }
 
-# 2) Backend — DATABASE_URL erzwingt die lokale DB, DB_AUTO_CREATE legt das Schema an.
+# 2) Schema per Alembic (wie Produktiv) — inkrementelle Migrationen statt
+#    create_all, damit Schema-Änderungen ohne DB-Reset ankommen.
+echo "▶ Datenbank-Migrationen (alembic upgrade head)…"
+( cd "$ROOT/backend" && env DATABASE_URL="$DEV_DB_URL" uv run alembic upgrade head )
+
+# 3) Backend — DATABASE_URL erzwingt die lokale DB; DB_AUTO_CREATE=false, weil
+#    jetzt Alembic das Schema besitzt (deckt fehlende Migrationen früh auf).
 echo "▶ Backend (FastAPI, :$BACKEND_PORT)…"
 start_bg backend "$ROOT/backend" \
-  env DATABASE_URL="$DEV_DB_URL" DB_AUTO_CREATE=true \
+  env DATABASE_URL="$DEV_DB_URL" DB_AUTO_CREATE=false \
   uv run uvicorn app.main:app --reload --port "$BACKEND_PORT"
 
-# 3) Frontend — Angular dev server (proxyt /api auf das Backend).
+# 4) Frontend — Angular dev server (proxyt /api auf das Backend).
 echo "▶ Frontend (Angular, :$FRONTEND_PORT)…"
 start_bg frontend "$ROOT/frontend" npm start -- --port "$FRONTEND_PORT"
 

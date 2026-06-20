@@ -3,85 +3,95 @@ import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 
 import { ShoppingItem, ShoppingState, Trip } from '../models';
+import { OfflineDbService } from './offline-db';
+import { SyncService } from './sync';
+import { AuthService } from './auth';
 
-const CACHE_KEY = 'grocery.shopping.cache';
-const QUEUE_KEY = 'grocery.shopping.queue';
-
-/** A pending check-off that failed to reach the server (resilient-online). */
-interface QueuedToggle {
-  itemId: number;
-  state: ShoppingState;
-}
+const CACHE_KEY = 'shopping';
 
 @Injectable({ providedIn: 'root' })
 export class ShoppingService {
   private http = inject(HttpClient);
+  private db = inject(OfflineDbService);
+  private sync = inject(SyncService);
+  private auth = inject(AuthService);
 
-  /** The active list (open + in-cart). Cached in localStorage for fast reads. */
-  readonly items = signal<ShoppingItem[]>(this.readCache());
+  /** The active list (open + in-cart). Cached in IndexedDB for offline reads. */
+  readonly items = signal<ShoppingItem[]>([]);
   readonly cartCount = computed(() => this.items().filter((i) => i.state === 'inCart').length);
 
   constructor() {
-    // Retry queued check-offs when connectivity returns.
-    window.addEventListener('online', () => void this.flushQueue());
+    void this.hydrate();
   }
 
+  private async hydrate(): Promise<void> {
+    const cached = await this.db.getCache<ShoppingItem[]>(CACHE_KEY);
+    if (cached && this.items().length === 0) this.items.set(cached.data);
+  }
+
+  /** Push queued changes first, then pull the server truth. Offline: keep cache. */
   async load(): Promise<void> {
+    await this.sync.flush();
+    await this.reloadFromServer();
+  }
+
+  async reloadFromServer(): Promise<void> {
     try {
       const items = await firstValueFrom(this.http.get<ShoppingItem[]>('/api/shopping/items'));
-      this.items.set(items);
-      this.writeCache(items);
-      await this.flushQueue();
+      this.setItems(items);
     } catch {
-      // Offline: keep whatever is cached.
+      // offline / unreachable — keep whatever is cached
     }
   }
 
-  /** Optimistic check-off / un-check. Updates the UI immediately and retries on
-   * failure (queued until the network is back). */
+  /** Optimistic check-off / un-check; queued + flushed (works offline). */
   async setState(item: ShoppingItem, state: ShoppingState): Promise<void> {
-    this.patchLocal(item.id, { state });
-    try {
-      await firstValueFrom(
-        this.http.patch(`/api/shopping/items/${item.id}`, { state }),
-      );
-    } catch {
-      this.enqueue({ itemId: item.id, state });
-    }
+    this.setItems(this.items().map((i) => (i.id === item.id ? { ...i, state } : i)));
+    await this.sync.enqueue({ type: 'shopping.toggle', payload: { itemId: item.id, state } });
+    void this.sync.flush();
   }
 
+  /** Optimistic add with a temporary id (reconciled to the real id on sync). */
   async add(displayName: string, amountText?: string, productId?: number): Promise<void> {
-    const created = await firstValueFrom(
-      this.http.post<ShoppingItem>('/api/shopping/items', {
+    const tempId = -Date.now();
+    const optimistic: ShoppingItem = {
+      id: tempId,
+      product_id: productId ?? null,
+      display_name: displayName,
+      amount_text: amountText ?? null,
+      source: 'manual',
+      added_by: this.auth.user()?.id ?? null,
+      state: 'open',
+      ignored_until_restock: false,
+    };
+    this.setItems(
+      [...this.items(), optimistic].sort((a, b) => a.display_name.localeCompare(b.display_name)),
+    );
+    await this.sync.enqueue({
+      type: 'shopping.add',
+      payload: {
+        tempId,
         display_name: displayName,
         amount_text: amountText ?? null,
         product_id: productId ?? null,
-      }),
-    );
-    const next = [...this.items(), created].sort((a, b) =>
-      a.display_name.localeCompare(b.display_name),
-    );
-    this.items.set(next);
-    this.writeCache(next);
+      },
+    });
+    void this.sync.flush();
   }
 
   /** Remove an entry (auto -> snoozed server-side, manual -> deleted). */
   async remove(item: ShoppingItem): Promise<void> {
-    const next = this.items().filter((i) => i.id !== item.id);
-    this.items.set(next);
-    this.writeCache(next);
-    try {
-      await firstValueFrom(this.http.delete(`/api/shopping/items/${item.id}`));
-    } catch {
-      await this.load(); // resync on failure
-    }
+    this.setItems(this.items().filter((i) => i.id !== item.id));
+    await this.sync.enqueue({ type: 'shopping.remove', payload: { itemId: item.id } });
+    void this.sync.flush();
   }
 
+  /** Finish the trip → archive. Online-only (offline the button just retries). */
   async complete(totalPrice: number | null): Promise<Trip> {
     const trip = await firstValueFrom(
       this.http.post<Trip>('/api/shopping/complete', { total_price: totalPrice }),
     );
-    await this.load();
+    await this.reloadFromServer();
     return trip;
   }
 
@@ -89,57 +99,8 @@ export class ShoppingService {
     return firstValueFrom(this.http.get<Trip[]>('/api/shopping/trips'));
   }
 
-  // ── internals ───────────────────────────────────────────────────────────────
-
-  private patchLocal(id: number, patch: Partial<ShoppingItem>): void {
-    const next = this.items().map((i) => (i.id === id ? { ...i, ...patch } : i));
-    this.items.set(next);
-    this.writeCache(next);
-  }
-
-  private async flushQueue(): Promise<void> {
-    const queue = this.readQueue();
-    const remaining: QueuedToggle[] = [];
-    for (const q of queue) {
-      try {
-        await firstValueFrom(
-          this.http.patch(`/api/shopping/items/${q.itemId}`, { state: q.state }),
-        );
-      } catch {
-        remaining.push(q); // still offline — keep it queued
-      }
-    }
-    this.writeQueue(remaining);
-  }
-
-  private enqueue(toggle: QueuedToggle): void {
-    const queue = this.readQueue().filter((q) => q.itemId !== toggle.itemId);
-    queue.push(toggle);
-    this.writeQueue(queue);
-  }
-
-  private readCache(): ShoppingItem[] {
-    return this.readJson<ShoppingItem[]>(CACHE_KEY) ?? [];
-  }
-
-  private writeCache(items: ShoppingItem[]): void {
-    localStorage.setItem(CACHE_KEY, JSON.stringify(items));
-  }
-
-  private readQueue(): QueuedToggle[] {
-    return this.readJson<QueuedToggle[]>(QUEUE_KEY) ?? [];
-  }
-
-  private writeQueue(queue: QueuedToggle[]): void {
-    localStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
-  }
-
-  private readJson<T>(key: string): T | null {
-    try {
-      const raw = localStorage.getItem(key);
-      return raw ? (JSON.parse(raw) as T) : null;
-    } catch {
-      return null;
-    }
+  private setItems(items: ShoppingItem[]): void {
+    this.items.set(items);
+    void this.db.setCache(CACHE_KEY, items);
   }
 }

@@ -7,6 +7,30 @@
     <nav
       class="fixed inset-x-0 bottom-0 z-10 border-t border-gray-200 bg-white/90 pb-[env(safe-area-inset-bottom)] backdrop-blur dark:border-neutral-800 dark:bg-neutral-900/90"
     >
+      @if (!connectivity.online()) {
+        <div
+          class="flex items-center justify-center gap-1.5 border-b border-amber-500/20 bg-amber-500/10 py-1 text-[11px] font-medium text-amber-700 dark:text-amber-400"
+        >
+          <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3 3l18 18M8.5 8.5A5 5 0 0 0 6 12.5m12.5-.5a6.5 6.5 0 0 0-9-6M12 17h.01" />
+          </svg>
+          @if (sync.pending() > 0) {
+            Offline – {{ sync.pending() }} Änderung(en) werden später synchronisiert
+          } @else {
+            Offline
+          }
+        </div>
+      } @else if (sync.pending() > 0) {
+        <button
+          (click)="sync.flush()"
+          class="flex w-full items-center justify-center gap-1.5 border-b border-blue-500/20 bg-blue-500/10 py-1 text-[11px] font-medium text-blue-700 dark:text-blue-400"
+        >
+          <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 12a8 8 0 0 1 14-5.3L20 8M20 12a8 8 0 0 1-14 5.3L4 16M20 4v4h-4M4 20v-4h4" />
+          </svg>
+          {{ sync.pending() }} Änderung(en) synchronisieren
+        </button>
+      }
       <div class="mx-auto grid max-w-xl grid-cols-4">
         <a
           routerLink="/"
@@ -94,4 +118,6 @@
       </div>
     </nav>
   }
+
+  <app-conflict-dialog />
 </div>

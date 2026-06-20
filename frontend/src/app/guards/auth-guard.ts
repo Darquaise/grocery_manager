@@ -6,6 +6,12 @@ import { AuthService } from '../services/auth';
 export const authGuard: CanActivateFn = async () => {
   const auth = inject(AuthService);
   const router = inject(Router);
-  const user = auth.user() ?? (await auth.fetchMe());
+  // With a cached user, let the app in immediately and re-verify in the
+  // background (offline-friendly; fetchMe only logs out on a real 401).
+  if (auth.user()) {
+    void auth.fetchMe();
+    return true;
+  }
+  const user = await auth.fetchMe();
   return user ? true : router.createUrlTree(['/login']);
 };
