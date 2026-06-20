@@ -39,11 +39,21 @@ class Category(SQLModel, table=True):
     is_default: bool = False
 
 
+class Location(SQLModel, table=True):
+    """A managed storage location (Kühlschrank, Vorratsschrank, …). Like
+    categories: editable list with a sort order, used to group/filter products."""
+
+    id: int | None = Field(default=None, primary_key=True)
+    name: str = Field(index=True)
+    sort_order: int = 0
+    is_default: bool = False
+
+
 class Product(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     name: str = Field(index=True)
     category_id: int | None = Field(default=None, foreign_key="category.id")
-    location: str | None = None
+    location_id: int | None = Field(default=None, foreign_key="location.id")
 
     tracking_type: TrackingType = TrackingType.status
     # Meaning depends on tracking_type:

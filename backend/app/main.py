@@ -8,7 +8,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.types import Scope
 
-from .api import auth, categories, products, shopping, users
+from .api import auth, categories, locations, products, shopping, users
 from .config import settings
 from .db import engine
 from .seed import seed
@@ -39,6 +39,7 @@ app.add_middleware(
 app.include_router(auth.router, prefix="/api")
 app.include_router(users.router, prefix="/api")
 app.include_router(categories.router, prefix="/api")
+app.include_router(locations.router, prefix="/api")
 app.include_router(products.router, prefix="/api")
 app.include_router(shopping.router, prefix="/api")
 

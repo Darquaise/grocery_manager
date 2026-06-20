@@ -15,7 +15,7 @@ router = APIRouter(prefix="/products", tags=["products"])
 class ProductIn(BaseModel):
     name: str
     category_id: int | None = None
-    location: str | None = None
+    location_id: int | None = None
     tracking_type: TrackingType = TrackingType.status
     current_value: float = 0
     min_value: float | None = None
@@ -30,7 +30,7 @@ class ProductUpdate(BaseModel):
 
     name: str | None = None
     category_id: int | None = None
-    location: str | None = None
+    location_id: int | None = None
     tracking_type: TrackingType | None = None
     current_value: float | None = None
     min_value: float | None = None

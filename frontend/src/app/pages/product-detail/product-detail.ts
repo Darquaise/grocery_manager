@@ -2,15 +2,16 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 
-import { Category, Product, ProductInput, TrackingType } from '../../models';
+import { Category, Location, Product, ProductInput, TrackingType } from '../../models';
 import { ProductsService } from '../../services/products';
 import { CategoriesService } from '../../services/categories';
+import { LocationsService } from '../../services/locations';
 import { statusLabel } from '../../util/format';
 
 interface FormModel {
   name: string;
   category_id: number | null;
-  location: string;
+  location_id: number | null;
   tracking_type: TrackingType;
   current_value: number;
   min_value: number | null;
@@ -104,7 +105,12 @@ interface FormModel {
 
       <label class="block text-sm">
         Lagerort
-        <input [(ngModel)]="form.location" placeholder="z. B. Kühlschrank" class="mt-1 w-full rounded-lg border border-gray-300 bg-transparent px-3 py-2 dark:border-neutral-700" />
+        <select [(ngModel)]="form.location_id" class="mt-1 w-full rounded-lg border border-gray-300 bg-transparent px-3 py-2 dark:border-neutral-700">
+          <option [ngValue]="null">Keiner</option>
+          @for (l of locations(); track l.id) {
+            <option [ngValue]="l.id">{{ l.name }}</option>
+          }
+        </select>
       </label>
 
       <label class="block text-sm">
@@ -195,12 +201,14 @@ export class ProductDetail {
   private router = inject(Router);
   private products = inject(ProductsService);
   private categoriesSvc = inject(CategoriesService);
+  private locationsSvc = inject(LocationsService);
 
   readonly status = statusLabel;
 
   private id: number | null = null;
   readonly isNew = signal(true);
   readonly categories = signal<Category[]>([]);
+  readonly locations = signal<Location[]>([]);
   readonly saving = signal(false);
   readonly error = signal('');
   exactValue: number | null = null;
@@ -208,7 +216,7 @@ export class ProductDetail {
   form: FormModel = {
     name: '',
     category_id: null,
-    location: '',
+    location_id: null,
     tracking_type: 'status',
     current_value: 4,
     min_value: 1,
@@ -222,6 +230,7 @@ export class ProductDetail {
 
   constructor() {
     void this.categoriesSvc.list().then((c) => this.categories.set(c));
+    void this.locationsSvc.list().then((l) => this.locations.set(l));
     const param = this.route.snapshot.paramMap.get('id');
     if (param && param !== 'new') {
       this.id = Number(param);
@@ -239,7 +248,7 @@ export class ProductDetail {
     this.form = {
       name: p.name,
       category_id: p.category_id,
-      location: p.location ?? '',
+      location_id: p.location_id,
       tracking_type: p.tracking_type,
       current_value: p.current_value,
       min_value: p.min_value,
@@ -280,7 +289,7 @@ export class ProductDetail {
     const payload: ProductInput = {
       name: this.form.name.trim(),
       category_id: this.form.category_id,
-      location: this.form.location.trim() || null,
+      location_id: this.form.location_id,
       tracking_type: this.form.tracking_type,
       current_value: this.form.current_value,
       min_value: this.form.min_value,

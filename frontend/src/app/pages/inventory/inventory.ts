@@ -2,9 +2,10 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 
-import { Category, Product } from '../../models';
+import { Category, Location, Product } from '../../models';
 import { ProductsService } from '../../services/products';
 import { CategoriesService } from '../../services/categories';
+import { LocationsService } from '../../services/locations';
 import { formatValue, isLow } from '../../util/format';
 
 interface Group {
@@ -28,9 +29,9 @@ interface Group {
           [(ngModel)]="locationFilter"
           class="w-full rounded-lg border border-gray-300 bg-transparent px-3 py-2 dark:border-neutral-700"
         >
-          <option value="">Alle Lagerorte</option>
-          @for (loc of locations(); track loc) {
-            <option [value]="loc">{{ loc }}</option>
+          <option [ngValue]="''">Alle Lagerorte</option>
+          @for (loc of locations(); track loc.id) {
+            <option [ngValue]="loc.id">{{ loc.name }}</option>
           }
         </select>
       }
@@ -58,8 +59,8 @@ interface Group {
                       <span class="h-2 w-2 shrink-0 rounded-full bg-amber-500"></span>
                     }
                     <span>{{ p.name }}</span>
-                    @if (p.location) {
-                      <span class="text-xs opacity-40">{{ p.location }}</span>
+                    @if (locationName(p.location_id); as loc) {
+                      <span class="text-xs opacity-40">{{ loc }}</span>
                     }
                   </span>
                   <span
@@ -79,7 +80,7 @@ interface Group {
 
     <a
       routerLink="/products/new"
-      class="fixed bottom-24 right-4 z-10 flex h-14 w-14 items-center justify-center rounded-full bg-blue-600 text-3xl leading-none text-white shadow-lg"
+      class="fixed bottom-[calc(6rem+env(safe-area-inset-bottom))] right-4 z-10 flex h-14 w-14 items-center justify-center rounded-full bg-blue-600 text-3xl leading-none text-white shadow-lg"
       aria-label="Produkt hinzufügen"
     >
       +
@@ -89,27 +90,32 @@ interface Group {
 export class Inventory {
   private products = inject(ProductsService);
   private categories = inject(CategoriesService);
+  private locationsSvc = inject(LocationsService);
 
   readonly value = formatValue;
   readonly isLow = isLow;
 
   private items = signal<Product[]>([]);
   private cats = signal<Category[]>([]);
+  private locs = signal<Location[]>([]);
   readonly loading = signal(true);
 
   search = signal('');
-  locationFilter = signal('');
+  locationFilter = signal<number | ''>('');
 
-  readonly locations = computed(() =>
-    [...new Set(this.items().map((p) => p.location).filter((l): l is string => !!l))].sort(),
-  );
+  readonly locations = computed(() => this.locs());
+
+  private readonly locById = computed(() => new Map(this.locs().map((l) => [l.id, l.name])));
+
+  locationName(id: number | null): string | null {
+    return id == null ? null : (this.locById().get(id) ?? null);
+  }
 
   readonly groups = computed<Group[]>(() => {
     const q = this.search().trim().toLowerCase();
     const loc = this.locationFilter();
     const filtered = this.items().filter(
-      (p) =>
-        (!q || p.name.toLowerCase().includes(q)) && (!loc || (p.location ?? '') === loc),
+      (p) => (!q || p.name.toLowerCase().includes(q)) && (loc === '' || p.location_id === loc),
     );
 
     const byCategory = new Map<number, Product[]>();
@@ -139,12 +145,14 @@ export class Inventory {
 
   private async load(): Promise<void> {
     try {
-      const [products, categories] = await Promise.all([
+      const [products, categories, locations] = await Promise.all([
         this.products.list(),
         this.categories.list(),
+        this.locationsSvc.list(),
       ]);
       this.items.set(products);
       this.cats.set(categories);
+      this.locs.set(locations);
     } finally {
       this.loading.set(false);
     }

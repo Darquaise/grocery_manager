@@ -15,11 +15,18 @@ export interface Category {
   is_default: boolean;
 }
 
+export interface Location {
+  id: number;
+  name: string;
+  sort_order: number;
+  is_default: boolean;
+}
+
 export interface Product {
   id: number;
   name: string;
   category_id: number | null;
-  location: string | null;
+  location_id: number | null;
   tracking_type: TrackingType;
   current_value: number;
   min_value: number | null;
@@ -36,7 +43,7 @@ export interface Product {
 export interface ProductInput {
   name: string;
   category_id: number | null;
-  location: string | null;
+  location_id: number | null;
   tracking_type: TrackingType;
   current_value: number;
   min_value: number | null;
