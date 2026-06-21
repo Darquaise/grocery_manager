@@ -2,7 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 
-import { Product, ProductInput } from '../models';
+import { Product, ProductInput, StockInput } from '../models';
 import { OfflineDbService } from './offline-db';
 
 const CACHE_KEY = 'products';
@@ -30,13 +30,13 @@ export class ProductsService {
     return entry?.data.find((p) => p.id === id) ?? null;
   }
 
-  /** Optimistically patch the cached list (e.g. a stock change made offline). */
-  async patchCached(id: number, partial: Partial<Product>): Promise<void> {
+  /** Optimistically replace a cached product (e.g. a stock change made offline). */
+  async putCached(product: Product): Promise<void> {
     const entry = await this.db.getCache<Product[]>(CACHE_KEY);
     if (!entry) return;
     await this.db.setCache(
       CACHE_KEY,
-      entry.data.map((p) => (p.id === id ? { ...p, ...partial } : p)),
+      entry.data.map((p) => (p.id === product.id ? product : p)),
     );
   }
 
@@ -54,5 +54,25 @@ export class ProductsService {
 
   remove(id: number): Promise<void> {
     return firstValueFrom(this.http.delete<void>(`/api/products/${id}`));
+  }
+
+  // ── stock ───────────────────────────────────────────────────────────────────
+
+  addStock(productId: number, data: StockInput): Promise<Product> {
+    return firstValueFrom(this.http.post<Product>(`/api/products/${productId}/stock`, data));
+  }
+
+  adjustStock(
+    productId: number,
+    stockId: number,
+    data: { status_level?: number; remaining?: number; expected_updated_at?: string | null },
+  ): Promise<Product> {
+    return firstValueFrom(
+      this.http.patch<Product>(`/api/products/${productId}/stock/${stockId}`, data),
+    );
+  }
+
+  removeStock(productId: number, stockId: number): Promise<Product> {
+    return firstValueFrom(this.http.delete<Product>(`/api/products/${productId}/stock/${stockId}`));
   }
 }

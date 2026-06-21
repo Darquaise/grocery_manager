@@ -2,20 +2,21 @@ import { Injectable, Injector, inject, signal } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 
-import { Product, ShoppingItem, TrackingType } from '../models';
+import { ShoppingItem, StockItem, TrackingType } from '../models';
 import { OfflineDbService, OutboxOp } from './offline-db';
 import { ShoppingService } from './shopping';
 import { ProductsService } from './products';
 
 /** A stock change that collided with a concurrent server-side change. */
-export interface AdjustConflict {
+export interface StockConflict {
   productId: number;
+  stockId: number;
   productName: string;
+  trackingType: TrackingType;
+  field: 'status_level' | 'remaining';
   mineValue: number;
   theirsValue: number;
   serverUpdatedAt: string;
-  trackingType: TrackingType;
-  unit: string | null;
 }
 
 /**
@@ -34,8 +35,10 @@ export class SyncService {
   readonly pending = signal(0);
   /** Shopping item ids (incl. temp ids) that still have a queued change. */
   readonly pendingShoppingIds = signal<ReadonlySet<number>>(new Set());
+  /** Product ids that still have a queued stock change. */
+  readonly pendingProductIds = signal<ReadonlySet<number>>(new Set());
   /** Unresolved stock-change conflicts awaiting a user decision. */
-  readonly conflicts = signal<AdjustConflict[]>([]);
+  readonly conflicts = signal<StockConflict[]>([]);
 
   private flushing = false;
 
@@ -49,16 +52,20 @@ export class SyncService {
   }
 
   async enqueue(op: Omit<OutboxOp, 'id' | 'createdAt'>): Promise<void> {
-    // Collapse repeated stock changes of the same product into one queued op
+    // Collapse repeated adjusts of the same stock package into one queued op
     // (final value wins, earliest base kept) so my own offline taps don't
     // conflict with each other.
-    if (op.type === 'product.adjust') {
+    if (op.type === 'stock.adjust') {
       const ops = await this.db.allOps();
       const existing = ops.find(
-        (o) => o.type === 'product.adjust' && o.payload['productId'] === op.payload['productId'],
+        (o) => o.type === 'stock.adjust' && o.payload['stockId'] === op.payload['stockId'],
       );
       if (existing) {
-        existing.payload = { ...existing.payload, currentValue: op.payload['currentValue'] };
+        existing.payload = {
+          ...existing.payload,
+          field: op.payload['field'],
+          value: op.payload['value'],
+        };
         await this.db.putOp(existing);
         await this.refreshState();
         return;
@@ -73,6 +80,7 @@ export class SyncService {
     if (this.flushing) return;
     this.flushing = true;
     let shoppingChanged = false;
+    let stockChanged = false;
     try {
       const ops = await this.db.allOps();
       const idMap = new Map<number, number>(); // offline temp id -> real server id
@@ -80,15 +88,16 @@ export class SyncService {
         try {
           await this.apply(op, idMap);
           if (op.type.startsWith('shopping.')) shoppingChanged = true;
+          if (op.type.startsWith('stock.')) stockChanged = true;
           if (op.id != null) await this.db.deleteOp(op.id);
         } catch (err) {
           if (err instanceof HttpErrorResponse && err.status === 0) break; // still offline
           if (
             err instanceof HttpErrorResponse &&
             err.status === 409 &&
-            op.type === 'product.adjust'
+            op.type === 'stock.adjust'
           ) {
-            this.recordAdjustConflict(op, err.error?.detail as Product | undefined);
+            this.recordStockConflict(op, err.error?.detail as StockItem | undefined);
           }
           // Conflict handled, or unrecoverable server error (e.g. item gone):
           // drop the op so it can't block the rest of the queue.
@@ -103,6 +112,13 @@ export class SyncService {
           await this.injector.get(ShoppingService).reloadFromServer();
         } catch {
           /* offline — keep optimistic local list */
+        }
+      }
+      if (stockChanged) {
+        try {
+          await this.injector.get(ProductsService).list();
+        } catch {
+          /* offline — keep optimistic local cache */
         }
       }
     }
@@ -127,7 +143,9 @@ export class SyncService {
         let id = p['itemId'] as number;
         if (id < 0) id = idMap.get(id) ?? id;
         if (id < 0) return; // item was added offline and never synced — skip
-        await firstValueFrom(this.http.patch(`/api/shopping/items/${id}`, { state: p['state'] }));
+        const body: Record<string, unknown> = { state: p['state'] };
+        if (p['purchase_plan'] !== undefined) body['purchase_plan'] = p['purchase_plan'];
+        await firstValueFrom(this.http.patch(`/api/shopping/items/${id}`, body));
         break;
       }
       case 'shopping.remove': {
@@ -136,50 +154,81 @@ export class SyncService {
         await firstValueFrom(this.http.delete(`/api/shopping/items/${id}`));
         break;
       }
-      case 'product.adjust': {
+      case 'stock.add': {
         await firstValueFrom(
-          this.http.post(`/api/products/${p['productId']}/adjust`, {
-            current_value: p['currentValue'],
-            expected_updated_at: op.baseUpdatedAt ?? null,
+          this.http.post(`/api/products/${p['productId']}/stock`, {
+            expiry_date: p['expiry_date'] ?? null,
+            purchase_date: p['purchase_date'] ?? null,
+            status_level: p['status_level'] ?? null,
+            remaining: p['remaining'] ?? null,
+            size: p['size'] ?? null,
           }),
+        );
+        break;
+      }
+      case 'stock.adjust': {
+        const stockId = p['stockId'] as number;
+        if (stockId < 0) return; // package was added offline and never synced — skip
+        const body: Record<string, unknown> = { expected_updated_at: op.baseUpdatedAt ?? null };
+        body[p['field'] as string] = p['value'];
+        await firstValueFrom(
+          this.http.patch(`/api/products/${p['productId']}/stock/${stockId}`, body),
+        );
+        break;
+      }
+      case 'stock.remove': {
+        const stockId = p['stockId'] as number;
+        if (stockId < 0) return; // never reached the server — nothing to delete
+        await firstValueFrom(
+          this.http.delete(`/api/products/${p['productId']}/stock/${stockId}`),
         );
         break;
       }
     }
   }
 
-  private recordAdjustConflict(op: OutboxOp, server: Product | undefined): void {
+  private recordStockConflict(op: OutboxOp, server: StockItem | undefined): void {
     if (!server) return;
-    const mine = op.payload['currentValue'] as number;
-    if (server.current_value === mine) return; // same result → resolve silently
+    const field = op.payload['field'] as 'status_level' | 'remaining';
+    const mine = op.payload['value'] as number;
+    const theirs = (field === 'status_level' ? server.status_level : server.remaining) ?? 0;
+    if (theirs === mine) return; // same result → resolve silently
     this.conflicts.update((cs) => [
-      ...cs.filter((c) => c.productId !== server.id),
+      ...cs.filter((c) => c.stockId !== server.id),
       {
-        productId: server.id,
-        productName: server.name,
+        productId: op.payload['productId'] as number,
+        stockId: server.id,
+        productName: (op.payload['productName'] as string) ?? '',
+        trackingType: (op.payload['trackingType'] as TrackingType) ?? 'counter',
+        field,
         mineValue: mine,
-        theirsValue: server.current_value,
+        theirsValue: theirs,
         serverUpdatedAt: server.updated_at,
-        trackingType: server.tracking_type,
-        unit: server.unit,
       },
     ]);
   }
 
   /** Keep my offline value: re-queue the adjust based on the new server state. */
-  async resolveKeepMine(c: AdjustConflict): Promise<void> {
-    this.conflicts.update((cs) => cs.filter((x) => x.productId !== c.productId));
+  async resolveKeepMine(c: StockConflict): Promise<void> {
+    this.conflicts.update((cs) => cs.filter((x) => x.stockId !== c.stockId));
     await this.enqueue({
-      type: 'product.adjust',
-      payload: { productId: c.productId, currentValue: c.mineValue },
+      type: 'stock.adjust',
+      payload: {
+        productId: c.productId,
+        stockId: c.stockId,
+        field: c.field,
+        value: c.mineValue,
+        productName: c.productName,
+        trackingType: c.trackingType,
+      },
       baseUpdatedAt: c.serverUpdatedAt,
     });
     void this.flush();
   }
 
   /** Accept the other person's value: drop mine, refresh the product cache. */
-  async resolveKeepTheirs(c: AdjustConflict): Promise<void> {
-    this.conflicts.update((cs) => cs.filter((x) => x.productId !== c.productId));
+  async resolveKeepTheirs(c: StockConflict): Promise<void> {
+    this.conflicts.update((cs) => cs.filter((x) => x.stockId !== c.stockId));
     try {
       await this.injector.get(ProductsService).list();
     } catch {
@@ -190,18 +239,23 @@ export class SyncService {
   private async refreshState(): Promise<void> {
     const ops = await this.db.allOps();
     this.pending.set(ops.length);
-    const ids = new Set<number>();
+    const shoppingIds = new Set<number>();
+    const productIds = new Set<number>();
     for (const op of ops) {
       const tempId = op.payload['tempId'];
       const itemId = op.payload['itemId'];
-      if (op.type === 'shopping.add' && typeof tempId === 'number') ids.add(tempId);
+      if (op.type === 'shopping.add' && typeof tempId === 'number') shoppingIds.add(tempId);
       if (
         (op.type === 'shopping.toggle' || op.type === 'shopping.remove') &&
         typeof itemId === 'number'
       ) {
-        ids.add(itemId);
+        shoppingIds.add(itemId);
+      }
+      if (op.type.startsWith('stock.') && typeof op.payload['productId'] === 'number') {
+        productIds.add(op.payload['productId'] as number);
       }
     }
-    this.pendingShoppingIds.set(ids);
+    this.pendingShoppingIds.set(shoppingIds);
+    this.pendingProductIds.set(productIds);
   }
 }

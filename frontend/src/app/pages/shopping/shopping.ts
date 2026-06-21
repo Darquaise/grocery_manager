@@ -2,12 +2,17 @@ import { Component, OnDestroy, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 
-import { Product, ShoppingItem } from '../../models';
+import { PlanEntry, Product, ShoppingItem } from '../../models';
 import { ShoppingService } from '../../services/shopping';
 import { ProductsService } from '../../services/products';
 import { UsersService } from '../../services/users';
 import { ConnectivityService } from '../../services/connectivity';
 import { SyncService } from '../../services/sync';
+
+interface PlanRow {
+  size: number;
+  expiry: string;
+}
 
 @Component({
   selector: 'app-shopping',
@@ -104,6 +109,57 @@ import { SyncService } from '../../services/sync';
         }
       </div>
     }
+
+    <!-- check-off dialog: quantity, then an expiry/size per package -->
+    @if (coItem(); as item) {
+      <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+        <div class="w-full max-w-sm rounded-2xl bg-white p-4 shadow-xl dark:bg-neutral-900">
+          <h2 class="text-lg font-semibold">{{ item.display_name }}</h2>
+
+          @if (coStep() === 1) {
+            <label class="mt-3 block text-sm">
+              Wie viele Packungen?
+              <input type="number" min="1" [(ngModel)]="coQty" class="mt-1 w-full rounded-lg border border-gray-300 bg-transparent px-3 py-2 dark:border-neutral-700" />
+            </label>
+            <div class="mt-4 flex gap-2">
+              <button (click)="closeCheckoff()" class="flex-1 rounded-lg border border-gray-300 py-2 dark:border-neutral-700">Abbrechen</button>
+              <button (click)="step1Next()" class="flex-1 rounded-lg bg-blue-600 py-2 font-medium text-white">
+                {{ needsStep2() ? 'Weiter' : 'Eingepackt' }}
+              </button>
+            </div>
+          } @else {
+            @if (coProduct()?.can_expire === 'expiry') {
+              <div class="mt-3 flex items-end gap-2">
+                <label class="flex-1 text-sm">
+                  Alle auf
+                  <input type="date" [(ngModel)]="coSameDate" class="mt-1 w-full rounded-lg border border-gray-300 bg-transparent px-3 py-2 dark:border-neutral-700" />
+                </label>
+                <button (click)="applySameDate()" class="rounded-lg bg-gray-200 px-3 py-2 text-sm dark:bg-neutral-800">Setzen</button>
+              </div>
+            }
+
+            <ul class="mt-3 max-h-72 space-y-2 overflow-y-auto">
+              @for (r of coRows; track $index; let i = $index) {
+                <li class="flex items-center gap-2">
+                  <span class="w-6 shrink-0 text-sm opacity-50">{{ i + 1 }}.</span>
+                  @if (coProduct()?.tracking_type === 'counter') {
+                    <input type="number" min="1" [(ngModel)]="r.size" placeholder="Größe" class="w-20 rounded-lg border border-gray-300 bg-transparent px-2 py-2 dark:border-neutral-700" />
+                  }
+                  @if (coProduct()?.can_expire === 'expiry') {
+                    <input type="date" [(ngModel)]="r.expiry" class="min-w-0 flex-1 rounded-lg border border-gray-300 bg-transparent px-2 py-2 dark:border-neutral-700" />
+                  }
+                </li>
+              }
+            </ul>
+
+            <div class="mt-4 flex gap-2">
+              <button (click)="coStep.set(1)" class="flex-1 rounded-lg border border-gray-300 py-2 dark:border-neutral-700">Zurück</button>
+              <button (click)="confirmCheckoff()" class="flex-1 rounded-lg bg-blue-600 py-2 font-medium text-white">Eingepackt</button>
+            </div>
+          }
+        </div>
+      </div>
+    }
   `,
 })
 export class Shopping implements OnDestroy {
@@ -120,6 +176,14 @@ export class Shopping implements OnDestroy {
   readonly completing = signal(false);
   readonly busy = signal(false);
   totalPrice: number | null = null;
+
+  // check-off dialog state
+  readonly coItem = signal<ShoppingItem | null>(null);
+  readonly coProduct = signal<Product | null>(null);
+  readonly coStep = signal<1 | 2>(1);
+  coQty = 1;
+  coSameDate = '';
+  coRows: PlanRow[] = [];
 
   // Shared list: while this screen is open + online, refresh every 5 s so both
   // shoppers see what the other has already grabbed.
@@ -157,11 +221,75 @@ export class Shopping implements OnDestroy {
   }
 
   toggle(item: ShoppingItem): void {
-    void this.shopping.setState(item, item.state === 'inCart' ? 'open' : 'inCart');
+    if (item.state === 'inCart') {
+      void this.shopping.setState(item, 'open');
+      return;
+    }
+    const product =
+      item.product_id != null ? this.products().find((p) => p.id === item.product_id) : undefined;
+    if (!product) {
+      // free / unknown product → no stock to record
+      void this.shopping.setState(item, 'inCart');
+      return;
+    }
+    this.startCheckoff(item, product);
   }
 
   remove(item: ShoppingItem): void {
     void this.shopping.remove(item);
+  }
+
+  // ── check-off dialog ──────────────────────────────────────────────────────
+
+  private startCheckoff(item: ShoppingItem, product: Product): void {
+    this.coItem.set(item);
+    this.coProduct.set(product);
+    this.coStep.set(1);
+    this.coQty = 1;
+    this.coSameDate = '';
+    this.coRows = [];
+  }
+
+  needsStep2(): boolean {
+    const p = this.coProduct();
+    return !!p && (p.can_expire === 'expiry' || p.tracking_type === 'counter');
+  }
+
+  step1Next(): void {
+    const p = this.coProduct();
+    if (!p) return;
+    const qty = Math.max(1, Math.round(this.coQty || 1));
+    if (!this.needsStep2()) {
+      void this.finish(Array.from({ length: qty }, () => ({}) as PlanEntry));
+      return;
+    }
+    this.coRows = Array.from({ length: qty }, () => ({ size: p.package_size, expiry: '' }));
+    this.coStep.set(2);
+  }
+
+  applySameDate(): void {
+    this.coRows = this.coRows.map((r) => ({ ...r, expiry: this.coSameDate }));
+  }
+
+  confirmCheckoff(): void {
+    const p = this.coProduct();
+    if (!p) return;
+    const plan: PlanEntry[] = this.coRows.map((r) => ({
+      size: p.tracking_type === 'counter' ? Math.max(1, Math.round(r.size || 1)) : undefined,
+      expiry_date: p.can_expire === 'expiry' ? r.expiry || null : undefined,
+    }));
+    void this.finish(plan);
+  }
+
+  closeCheckoff(): void {
+    this.coItem.set(null);
+    this.coProduct.set(null);
+  }
+
+  private async finish(plan: PlanEntry[]): Promise<void> {
+    const item = this.coItem();
+    if (item) await this.shopping.setState(item, 'inCart', plan);
+    this.closeCheckoff();
   }
 
   async complete(): Promise<void> {

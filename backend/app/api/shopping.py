@@ -1,5 +1,5 @@
 import json
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
@@ -7,25 +7,29 @@ from sqlmodel import Session, select
 
 from ..db import get_session
 from ..models import (
+    ExpiryMode,
     Product,
     ShoppingListItem,
     ShoppingSource,
     ShoppingState,
     ShoppingTrip,
-    TrackingType,
+    StockItem,
     User,
 )
-from ..shopping_logic import reconcile_auto_items
+from ..shopping_logic import STATUS_FULL, is_status, reconcile_auto_items
 from .deps import current_user
 
 router = APIRouter(prefix="/shopping", tags=["shopping"], dependencies=[Depends(current_user)])
 
-# "Full" ordinal for status-tracked products (0=empty, 1=low, 2=medium,
-# 3=almost full, 4=full).
-STATUS_FULL = 4.0
-
 
 # ── Active list ───────────────────────────────────────────────────────────────
+
+
+class PlanEntry(BaseModel):
+    """One package to add to stock when the trip completes."""
+
+    size: int | None = None
+    expiry_date: date | None = None
 
 
 class ShoppingItemIn(BaseModel):
@@ -37,6 +41,8 @@ class ShoppingItemIn(BaseModel):
 class ShoppingItemUpdate(BaseModel):
     state: ShoppingState | None = None
     amount_text: str | None = None
+    # The packages to add to stock on completion (set when checking off).
+    purchase_plan: list[PlanEntry] | None = None
 
 
 @router.get("/items", response_model=list[ShoppingListItem])
@@ -78,13 +84,17 @@ def update_item(
     data: ShoppingItemUpdate,
     session: Session = Depends(get_session),
 ):
-    """Check off / un-check (open <-> inCart) and edit the amount text."""
+    """Check off / un-check (open <-> inCart), edit the amount text, or record the
+    purchase plan (quantity + expiry dates) used when the trip is completed."""
     item = session.get(ShoppingListItem, item_id)
     if not item:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "item not found")
     fields = data.model_dump(exclude_unset=True)
     if "amount_text" in fields:
         item.amount_text = fields["amount_text"]
+    if "purchase_plan" in fields:
+        plan = fields["purchase_plan"]
+        item.purchase_plan = json.dumps(plan, default=str) if plan is not None else None
     if fields.get("state") is not None:
         item.state = fields["state"]
         if item.state == ShoppingState.in_cart:
@@ -101,7 +111,7 @@ def delete_item(
     session: Session = Depends(get_session),
 ):
     """Remove an entry. Auto entries are *snoozed* (kept hidden until the product
-    is refilled and drops below its min again); manual entries are deleted."""
+    is refilled and drops below its threshold again); manual entries are deleted."""
     item = session.get(ShoppingListItem, item_id)
     if not item:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "item not found")
@@ -160,15 +170,50 @@ def _get_or_create_active_trip(session: Session) -> ShoppingTrip:
     return trip
 
 
-def _apply_full_value(product: Product, user: User) -> None:
-    """After buying: status -> full; products with a `full_value` -> that value;
-    otherwise leave the value (the user fills in the exact amount when unpacking)."""
-    if product.tracking_type == TrackingType.status:
-        product.current_value = STATUS_FULL
-    elif product.full_value is not None:
-        product.current_value = product.full_value
-    product.updated_at = datetime.now(UTC)
-    product.updated_by = user.id
+def _materialize_stock(
+    session: Session, product: Product, plan_json: str | None, user: User
+) -> None:
+    """Turn an item's purchase plan into StockItems. Missing plan = one package."""
+    try:
+        plan = json.loads(plan_json) if plan_json else []
+    except (ValueError, TypeError):
+        plan = []
+    if not plan:
+        plan = [{}]  # checked off without the dialog -> one default package
+
+    today = date.today()
+    for entry in plan:
+        if product.can_expire == ExpiryMode.expiry:
+            raw = entry.get("expiry_date")
+            expiry = date.fromisoformat(raw) if raw else None
+            purchase = None
+        elif product.can_expire == ExpiryMode.purchase_date:
+            expiry, purchase = None, today
+        else:
+            expiry, purchase = None, None
+
+        if is_status(product):
+            session.add(
+                StockItem(
+                    product_id=product.id,
+                    status_level=STATUS_FULL,
+                    expiry_date=expiry,
+                    purchase_date=purchase,
+                    updated_by=user.id,
+                )
+            )
+        else:
+            size = entry.get("size") or product.package_size
+            session.add(
+                StockItem(
+                    product_id=product.id,
+                    size=size,
+                    remaining=size,
+                    expiry_date=expiry,
+                    purchase_date=purchase,
+                    updated_by=user.id,
+                )
+            )
 
 
 @router.post("/complete", response_model=TripOut)
@@ -177,9 +222,9 @@ def complete_trip(
     session: Session = Depends(get_session),
     user: User = Depends(current_user),
 ):
-    """Finish the active trip: archive the bought (in-cart) entries, apply the
-    "full" value to their products, and clear them off the active list. Unchecked
-    entries stay on the list for next time."""
+    """Finish the active trip: archive the bought (in-cart) entries, materialise
+    their planned packages into stock, and clear them off the active list.
+    Unchecked entries stay on the list for next time."""
     bought = session.exec(
         select(ShoppingListItem).where(ShoppingListItem.state == ShoppingState.in_cart)
     ).all()
@@ -200,7 +245,7 @@ def complete_trip(
         if item.product_id is not None:
             product = session.get(Product, item.product_id)
             if product and product.deleted_at is None:
-                _apply_full_value(product, user)
+                _materialize_stock(session, product, item.purchase_plan, user)
         session.delete(item)
 
     trip = _get_or_create_active_trip(session)

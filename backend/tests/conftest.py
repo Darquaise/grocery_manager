@@ -60,11 +60,23 @@ def make_product(auth_client):
     """Factory: create a product via the API and return its JSON."""
 
     def _make(**overrides):
-        body = {"name": "Test", "tracking_type": "status", "current_value": 2}
+        body = {"name": "Test", "package_size": 1, "can_expire": "none"}
         body.update(overrides)
         resp = auth_client.post("/api/products", json=body)
         assert resp.status_code == 201, resp.text
         return resp.json()
 
     return _make
+
+
+@pytest.fixture()
+def add_stock(auth_client):
+    """Factory: add one stock package to a product and return the product JSON."""
+
+    def _add(product_id, **kw):
+        resp = auth_client.post(f"/api/products/{product_id}/stock", json=kw)
+        assert resp.status_code == 201, resp.text
+        return resp.json()
+
+    return _add
 

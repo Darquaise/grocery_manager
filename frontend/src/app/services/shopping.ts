@@ -2,7 +2,7 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 
-import { ShoppingItem, ShoppingState, Trip } from '../models';
+import { PlanEntry, ShoppingItem, ShoppingState, Trip } from '../models';
 import { OfflineDbService } from './offline-db';
 import { SyncService } from './sync';
 import { AuthService } from './auth';
@@ -44,10 +44,17 @@ export class ShoppingService {
     }
   }
 
-  /** Optimistic check-off / un-check; queued + flushed (works offline). */
-  async setState(item: ShoppingItem, state: ShoppingState): Promise<void> {
-    this.setItems(this.items().map((i) => (i.id === item.id ? { ...i, state } : i)));
-    await this.sync.enqueue({ type: 'shopping.toggle', payload: { itemId: item.id, state } });
+  /** Optimistic check-off / un-check; queued + flushed (works offline). A
+   * `plan` (quantity + expiry dates) is recorded server-side and materialised
+   * into stock when the trip completes. */
+  async setState(item: ShoppingItem, state: ShoppingState, plan?: PlanEntry[]): Promise<void> {
+    const planJson = plan ? JSON.stringify(plan) : item.purchase_plan;
+    this.setItems(
+      this.items().map((i) => (i.id === item.id ? { ...i, state, purchase_plan: planJson } : i)),
+    );
+    const payload: Record<string, unknown> = { itemId: item.id, state };
+    if (plan) payload['purchase_plan'] = plan;
+    await this.sync.enqueue({ type: 'shopping.toggle', payload });
     void this.sync.flush();
   }
 
@@ -63,6 +70,7 @@ export class ShoppingService {
       added_by: this.auth.user()?.id ?? null,
       state: 'open',
       ignored_until_restock: false,
+      purchase_plan: null,
     };
     this.setItems(
       [...this.items(), optimistic].sort((a, b) => a.display_name.localeCompare(b.display_name)),

@@ -6,7 +6,7 @@ import { Category, Location, Product } from '../../models';
 import { ProductsService } from '../../services/products';
 import { CategoriesService } from '../../services/categories';
 import { LocationsService } from '../../services/locations';
-import { formatValue, isLow } from '../../util/format';
+import { formatValue, isLow, stockCaption } from '../../util/format';
 
 interface Group {
   name: string;
@@ -54,14 +54,21 @@ interface Group {
                   [routerLink]="['/products', p.id]"
                   class="flex items-center justify-between gap-3 px-4 py-3 active:bg-gray-100 dark:active:bg-neutral-900"
                 >
-                  <span class="flex items-center gap-2">
+                  <span class="flex min-w-0 items-center gap-2">
                     @if (isLow(p)) {
                       <span class="h-2 w-2 shrink-0 rounded-full bg-amber-500"></span>
                     }
-                    <span>{{ p.name }}</span>
-                    @if (locationName(p.location_id); as loc) {
-                      <span class="text-xs opacity-40">{{ loc }}</span>
-                    }
+                    <span class="min-w-0">
+                      <span class="flex items-center gap-2">
+                        <span class="truncate">{{ p.name }}</span>
+                        @if (locationName(p.location_id); as loc) {
+                          <span class="shrink-0 text-xs opacity-40">{{ loc }}</span>
+                        }
+                      </span>
+                      @if (caption(p); as cap) {
+                        <span class="block text-xs opacity-50">{{ cap }}</span>
+                      }
+                    </span>
                   </span>
                   <span
                     class="shrink-0 text-sm"
@@ -94,6 +101,7 @@ export class Inventory {
 
   readonly value = formatValue;
   readonly isLow = isLow;
+  readonly caption = stockCaption;
 
   private items = signal<Product[]>([]);
   private cats = signal<Category[]>([]);

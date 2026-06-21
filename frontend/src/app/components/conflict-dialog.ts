@@ -1,11 +1,11 @@
 import { Component, inject } from '@angular/core';
 
-import { AdjustConflict, SyncService } from '../services/sync';
+import { StockConflict, SyncService } from '../services/sync';
 import { statusLabel } from '../util/format';
 
 /**
  * Modal shown when an offline stock change collided with a concurrent change.
- * The user picks per product whose value should win. Self-hides when there are
+ * The user picks per package whose value should win. Self-hides when there are
  * no conflicts; rendered once in the app shell.
  */
 @Component({
@@ -20,7 +20,7 @@ import { statusLabel } from '../util/format';
             Diese Bestände wurden zwischenzeitlich auch woanders geändert. Welcher Wert soll gelten?
           </p>
           <ul class="mt-3 space-y-3">
-            @for (c of sync.conflicts(); track c.productId) {
+            @for (c of sync.conflicts(); track c.stockId) {
               <li class="rounded-xl border border-gray-200 p-3 dark:border-neutral-700">
                 <p class="font-medium">{{ c.productName }}</p>
                 <div class="mt-2 grid grid-cols-2 gap-2 text-sm">
@@ -50,8 +50,7 @@ import { statusLabel } from '../util/format';
 export class ConflictDialog {
   protected sync = inject(SyncService);
 
-  fmt(c: AdjustConflict, value: number): string {
-    if (c.trackingType === 'status') return statusLabel(value);
-    return c.unit ? `${value} ${c.unit}` : String(value);
+  fmt(c: StockConflict, value: number): string {
+    return c.field === 'status_level' ? statusLabel(value) : String(value);
   }
 }

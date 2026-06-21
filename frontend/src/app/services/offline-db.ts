@@ -20,7 +20,9 @@ export type OutboxType =
   | 'shopping.toggle'
   | 'shopping.add'
   | 'shopping.remove'
-  | 'product.adjust';
+  | 'stock.add'
+  | 'stock.adjust'
+  | 'stock.remove';
 
 export interface OutboxOp {
   id?: number;
