@@ -83,3 +83,18 @@ export interface Trip {
 
 /** Ordinal status levels (for `status`-tracked products), index = value 0..4. */
 export const STATUS_LABELS = ['Leer', 'Knapp', 'Mittel', 'Fast voll', 'Voll'] as const;
+
+/** Minimal shape shared by Category and Location (for the editable settings list). */
+export interface ListItem {
+  id: number;
+  name: string;
+  sort_order: number;
+}
+
+/** Contract the editable settings list drives — CategoriesService / LocationsService. */
+export interface ListStore {
+  list(): Promise<ListItem[]>;
+  create(name: string, sortOrder?: number): Promise<unknown>;
+  update(id: number, data: { name?: string; sort_order?: number }): Promise<unknown>;
+  remove(id: number): Promise<void>;
+}

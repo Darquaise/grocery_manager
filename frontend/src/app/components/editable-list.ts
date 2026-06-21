@@ -8,19 +8,7 @@ import {
   moveItemInArray,
 } from '@angular/cdk/drag-drop';
 
-/** Minimal shape both CategoriesService and LocationsService satisfy. */
-export interface ListItem {
-  id: number;
-  name: string;
-  sort_order: number;
-}
-
-export interface ListStore {
-  list(): Promise<ListItem[]>;
-  create(name: string, sortOrder?: number): Promise<unknown>;
-  update(id: number, data: { name?: string; sort_order?: number }): Promise<unknown>;
-  remove(id: number): Promise<void>;
-}
+import { ListItem, ListStore } from '../models';
 
 interface Row {
   id: number | null; // null = newly added, not yet saved

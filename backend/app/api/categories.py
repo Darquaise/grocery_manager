@@ -3,10 +3,10 @@ from pydantic import BaseModel
 from sqlmodel import Session, select
 
 from ..db import get_session
-from ..models import Category, Product, User
+from ..models import Category, Product
 from .deps import current_user
 
-router = APIRouter(prefix="/categories", tags=["categories"])
+router = APIRouter(prefix="/categories", tags=["categories"], dependencies=[Depends(current_user)])
 
 
 class CategoryIn(BaseModel):
@@ -20,7 +20,7 @@ class CategoryUpdate(BaseModel):
 
 
 @router.get("", response_model=list[Category])
-def list_categories(session: Session = Depends(get_session), user: User = Depends(current_user)):
+def list_categories(session: Session = Depends(get_session)):
     return session.exec(select(Category).order_by(Category.sort_order, Category.name)).all()
 
 
@@ -28,7 +28,6 @@ def list_categories(session: Session = Depends(get_session), user: User = Depend
 def create_category(
     data: CategoryIn,
     session: Session = Depends(get_session),
-    user: User = Depends(current_user),
 ):
     category = Category(name=data.name, sort_order=data.sort_order, is_default=False)
     session.add(category)
@@ -42,7 +41,6 @@ def update_category(
     category_id: int,
     data: CategoryUpdate,
     session: Session = Depends(get_session),
-    user: User = Depends(current_user),
 ):
     category = session.get(Category, category_id)
     if not category:
@@ -59,7 +57,6 @@ def update_category(
 def delete_category(
     category_id: int,
     session: Session = Depends(get_session),
-    user: User = Depends(current_user),
 ):
     """Delete a category; products in it fall back to "no category" (null)."""
     category = session.get(Category, category_id)

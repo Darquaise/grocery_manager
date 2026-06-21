@@ -3,10 +3,10 @@ from pydantic import BaseModel
 from sqlmodel import Session, select
 
 from ..db import get_session
-from ..models import Location, Product, User
+from ..models import Location, Product
 from .deps import current_user
 
-router = APIRouter(prefix="/locations", tags=["locations"])
+router = APIRouter(prefix="/locations", tags=["locations"], dependencies=[Depends(current_user)])
 
 
 class LocationIn(BaseModel):
@@ -20,7 +20,7 @@ class LocationUpdate(BaseModel):
 
 
 @router.get("", response_model=list[Location])
-def list_locations(session: Session = Depends(get_session), user: User = Depends(current_user)):
+def list_locations(session: Session = Depends(get_session)):
     return session.exec(select(Location).order_by(Location.sort_order, Location.name)).all()
 
 
@@ -28,7 +28,6 @@ def list_locations(session: Session = Depends(get_session), user: User = Depends
 def create_location(
     data: LocationIn,
     session: Session = Depends(get_session),
-    user: User = Depends(current_user),
 ):
     location = Location(name=data.name, sort_order=data.sort_order, is_default=False)
     session.add(location)
@@ -42,7 +41,6 @@ def update_location(
     location_id: int,
     data: LocationUpdate,
     session: Session = Depends(get_session),
-    user: User = Depends(current_user),
 ):
     location = session.get(Location, location_id)
     if not location:
@@ -59,7 +57,6 @@ def update_location(
 def delete_location(
     location_id: int,
     session: Session = Depends(get_session),
-    user: User = Depends(current_user),
 ):
     """Delete a location; products there fall back to "no location" (null)."""
     location = session.get(Location, location_id)

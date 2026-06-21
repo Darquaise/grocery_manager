@@ -54,7 +54,7 @@ start_bg() {  # name workdir command...
   ( cd "$dir" && exec nohup "$@" ) >"$logfile" 2>&1 &
   echo $! >"$pidfile"
   disown %% 2>/dev/null || true
-  echo "  $name → PID $!  ·  Log: ${logfile#$ROOT/}"
+  echo "  $name → PID $!  ·  Log: ${logfile#"$ROOT"/}"
 }
 
 # 2) Schema per Alembic (wie Produktiv) — inkrementelle Migrationen statt

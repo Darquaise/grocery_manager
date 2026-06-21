@@ -6,7 +6,7 @@ from ..db import get_session
 from ..models import User
 from .deps import current_user
 
-router = APIRouter(prefix="/users", tags=["users"])
+router = APIRouter(prefix="/users", tags=["users"], dependencies=[Depends(current_user)])
 
 
 class UserOut(BaseModel):
@@ -20,7 +20,7 @@ class UserUpdate(BaseModel):
 
 
 @router.get("", response_model=list[UserOut])
-def list_users(session: Session = Depends(get_session), user: User = Depends(current_user)):
+def list_users(session: Session = Depends(get_session)):
     """Both seeded accounts — used for colour markers across the UI."""
     return session.exec(select(User).order_by(User.id)).all()
 

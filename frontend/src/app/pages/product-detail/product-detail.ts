@@ -125,10 +125,10 @@ interface FormModel {
       </label>
 
       @if (isNew()) {
-        <label class="block text-sm">
+        <label class="block text-sm" for="pd-current-value">
           Anfangsbestand
           @if (form.tracking_type === 'status') {
-            <select [(ngModel)]="form.current_value" class="mt-1 w-full rounded-lg border border-gray-300 bg-transparent px-3 py-2 dark:border-neutral-700">
+            <select id="pd-current-value" [(ngModel)]="form.current_value" class="mt-1 w-full rounded-lg border border-gray-300 bg-transparent px-3 py-2 dark:border-neutral-700">
               <option [ngValue]="4">Voll</option>
               <option [ngValue]="3">Fast voll</option>
               <option [ngValue]="2">Mittel</option>
@@ -136,18 +136,18 @@ interface FormModel {
               <option [ngValue]="0">Leer</option>
             </select>
           } @else {
-            <input type="number" [(ngModel)]="form.current_value" class="mt-1 w-full rounded-lg border border-gray-300 bg-transparent px-3 py-2 dark:border-neutral-700" />
+            <input id="pd-current-value" type="number" [(ngModel)]="form.current_value" class="mt-1 w-full rounded-lg border border-gray-300 bg-transparent px-3 py-2 dark:border-neutral-700" />
           }
         </label>
       }
 
-      <label class="block text-sm">
+      <label class="block text-sm" for="pd-min-value">
         Auf die Einkaufsliste ab
         <span class="mt-0.5 block text-xs font-normal opacity-50">
           Bei diesem Bestand (oder weniger) landet das Produkt automatisch auf der Liste.
         </span>
         @if (form.tracking_type === 'status') {
-          <select [(ngModel)]="form.min_value" class="mt-1 w-full rounded-lg border border-gray-300 bg-transparent px-3 py-2 dark:border-neutral-700">
+          <select id="pd-min-value" [(ngModel)]="form.min_value" class="mt-1 w-full rounded-lg border border-gray-300 bg-transparent px-3 py-2 dark:border-neutral-700">
             <option [ngValue]="null">Nie automatisch</option>
             <option [ngValue]="3">Fast voll</option>
             <option [ngValue]="2">Mittel</option>
@@ -155,7 +155,7 @@ interface FormModel {
             <option [ngValue]="0">Leer</option>
           </select>
         } @else {
-          <input type="number" [(ngModel)]="form.min_value" placeholder="leer = nie automatisch" class="mt-1 w-full rounded-lg border border-gray-300 bg-transparent px-3 py-2 dark:border-neutral-700" />
+          <input id="pd-min-value" type="number" [(ngModel)]="form.min_value" placeholder="leer = nie automatisch" class="mt-1 w-full rounded-lg border border-gray-300 bg-transparent px-3 py-2 dark:border-neutral-700" />
         }
       </label>
 

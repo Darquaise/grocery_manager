@@ -10,7 +10,7 @@ from ..models import Product, TrackingType, User
 from ..shopping_logic import reconcile_auto_items
 from .deps import current_user
 
-router = APIRouter(prefix="/products", tags=["products"])
+router = APIRouter(prefix="/products", tags=["products"], dependencies=[Depends(current_user)])
 
 
 class ProductIn(BaseModel):
@@ -65,7 +65,6 @@ def _get_active(session: Session, product_id: int) -> Product:
 def list_products(
     include_deleted: bool = Query(False),
     session: Session = Depends(get_session),
-    user: User = Depends(current_user),
 ):
     query = select(Product).order_by(Product.name)
     if not include_deleted:
@@ -92,7 +91,6 @@ def create_product(
 def get_product(
     product_id: int,
     session: Session = Depends(get_session),
-    user: User = Depends(current_user),
 ):
     return _get_active(session, product_id)
 

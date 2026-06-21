@@ -128,6 +128,27 @@ Start ausfüllen (Name + Passwort), sonst werden keine Accounts geseedet.
 
 ---
 
+## Qualitäts-Check (vor jedem Commit)
+
+```bash
+cd backend  && uv run ruff check . && uv run pytest -q   # Lint + 27 Tests
+cd frontend && npm run lint && npm run build             # ESLint (angular-eslint) + Prod-Build
+```
+
+**Zusätzlich am Ende: IDE-Inspektion prüfen** (Warnungen/Hinweise, die `ruff`/ESLint/Build
+nicht zwingend melden). In IntelliJ IDEA `Analyze → Inspect Code…` mit Scope **„Whole
+project"** laufen lassen (deckt Backend-Python **und** Frontend-TypeScript ab) und das
+Ergebnis im „Inspection Results"-Fenster **als XML nach `/.inspections/`** (gitignored)
+exportieren — den Ordner vorher leeren, damit kein alter Stand mitgelesen wird. Findings
+einzeln durchgehen und echte Probleme beheben; bekannte False-Positives (z. B.
+IntelliJ/SQLModel-Inspektionen wie `Column.is_(None)`, `session.get(...)`-Returntyp
+`type[Product]`) bewusst stehen lassen. Rauschen ist im IntelliJ-Modul bereits per
+`excludeFolder` ausgeblendet: `node_modules`, `dist`, `.angular`, `.venv` und die
+autogenerierten `migrations/versions`. Voraussetzung: das Modul ist als **Python-Modul**
+mit Python-Interpreter als SDK angelegt (sonst verlangt „Inspect Code" eine JDK).
+
+---
+
 ## Image bauen & auf ep3o deployen
 
 ```bash

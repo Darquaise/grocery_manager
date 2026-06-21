@@ -52,17 +52,7 @@ export class ProductsService {
     return firstValueFrom(this.http.patch<Product>(`/api/products/${id}`, data));
   }
 
-  adjust(id: number, currentValue: number): Promise<Product> {
-    return firstValueFrom(
-      this.http.post<Product>(`/api/products/${id}/adjust`, { current_value: currentValue }),
-    );
-  }
-
   remove(id: number): Promise<void> {
     return firstValueFrom(this.http.delete<void>(`/api/products/${id}`));
-  }
-
-  restore(id: number): Promise<Product> {
-    return firstValueFrom(this.http.post<Product>(`/api/products/${id}/restore`, {}));
   }
 }

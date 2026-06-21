@@ -2,13 +2,13 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 
-import { Location } from '../models';
+import { Location, ListStore } from '../models';
 import { OfflineDbService } from './offline-db';
 
 const CACHE_KEY = 'locations';
 
 @Injectable({ providedIn: 'root' })
-export class LocationsService {
+export class LocationsService implements ListStore {
   private http = inject(HttpClient);
   private db = inject(OfflineDbService);
 

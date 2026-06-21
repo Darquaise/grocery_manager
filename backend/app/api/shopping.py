@@ -18,7 +18,7 @@ from ..models import (
 from ..shopping_logic import reconcile_auto_items
 from .deps import current_user
 
-router = APIRouter(prefix="/shopping", tags=["shopping"])
+router = APIRouter(prefix="/shopping", tags=["shopping"], dependencies=[Depends(current_user)])
 
 # "Full" ordinal for status-tracked products (0=empty, 1=low, 2=medium,
 # 3=almost full, 4=full).
@@ -40,7 +40,7 @@ class ShoppingItemUpdate(BaseModel):
 
 
 @router.get("/items", response_model=list[ShoppingListItem])
-def list_items(session: Session = Depends(get_session), user: User = Depends(current_user)):
+def list_items(session: Session = Depends(get_session)):
     """The active list: open + in-cart entries, minus snoozed auto entries."""
     return session.exec(
         select(ShoppingListItem)
@@ -77,7 +77,6 @@ def update_item(
     item_id: int,
     data: ShoppingItemUpdate,
     session: Session = Depends(get_session),
-    user: User = Depends(current_user),
 ):
     """Check off / un-check (open <-> inCart) and edit the amount text."""
     item = session.get(ShoppingListItem, item_id)
@@ -100,7 +99,6 @@ def update_item(
 def delete_item(
     item_id: int,
     session: Session = Depends(get_session),
-    user: User = Depends(current_user),
 ):
     """Remove an entry. Auto entries are *snoozed* (kept hidden until the product
     is refilled and drops below its min again); manual entries are deleted."""
@@ -220,7 +218,7 @@ def complete_trip(
 
 
 @router.get("/trips", response_model=list[TripOut])
-def list_trips(session: Session = Depends(get_session), user: User = Depends(current_user)):
+def list_trips(session: Session = Depends(get_session)):
     trips = session.exec(
         select(ShoppingTrip)
         .where(ShoppingTrip.completed_at.is_not(None))
@@ -233,7 +231,6 @@ def list_trips(session: Session = Depends(get_session), user: User = Depends(cur
 def get_trip(
     trip_id: int,
     session: Session = Depends(get_session),
-    user: User = Depends(current_user),
 ):
     trip = session.get(ShoppingTrip, trip_id)
     if not trip or trip.completed_at is None:

@@ -17,7 +17,7 @@ STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(_app: FastAPI):
     # In production Alembic owns the schema (the container runs `alembic upgrade
     # head` before uvicorn); for local dev create_all is a convenience. Seeding
     # (default categories + the two accounts) is idempotent and always runs.
