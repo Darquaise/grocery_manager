@@ -18,8 +18,8 @@ interface PlanRow {
   selector: 'app-shopping',
   imports: [FormsModule],
   template: `
-    <header class="p-4">
-      <h1 class="text-xl font-semibold">Einkaufsliste</h1>
+    <header class="px-4 pb-2 pt-3">
+      <h1 class="text-largetitle font-bold">Einkauf</h1>
     </header>
 
     <form (ngSubmit)="add()" class="flex flex-wrap gap-2 px-4 pb-3">
@@ -27,16 +27,15 @@ interface PlanRow {
         name="name"
         [(ngModel)]="newName"
         list="product-names"
-        placeholder="Hinzufügen…"
-        class="min-w-0 flex-1 rounded-lg border border-gray-300 bg-transparent px-3 py-2 dark:border-neutral-700"
+        placeholder="Hinzufügen"
+        class="field min-w-0 flex-1"
       />
-      <input
-        name="amount"
-        [(ngModel)]="newAmount"
-        placeholder="Menge (optional)"
-        class="w-32 rounded-lg border border-gray-300 bg-transparent px-3 py-2 dark:border-neutral-700"
-      />
-      <button type="submit" class="rounded-lg bg-blue-600 px-4 font-medium text-white">+</button>
+      <input name="amount" [(ngModel)]="newAmount" placeholder="Menge" class="field w-24 shrink-0" />
+      <button type="submit" class="btn btn-primary shrink-0 px-4" aria-label="Hinzufügen">
+        <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14M5 12h14" />
+        </svg>
+      </button>
       <datalist id="product-names">
         @for (p of products(); track p.id) {
           <option [value]="p.name"></option>
@@ -45,22 +44,24 @@ interface PlanRow {
     </form>
 
     @if (shopping.items().length === 0) {
-      <p class="px-4 text-sm opacity-60">Die Liste ist leer.</p>
+      <div class="px-8 pt-16 text-center">
+        <p class="text-[17px] font-medium text-label">Liste ist leer</p>
+        <p class="mt-1 text-[15px] text-label-2">Tippe oben etwas ein, um es aufzunehmen.</p>
+      </div>
     } @else {
-      <ul class="divide-y divide-gray-100 dark:divide-neutral-800">
+      <ul class="ios-card ios-list mx-4">
         @for (item of shopping.items(); track item.id) {
-          <li class="flex items-center gap-3 px-4 py-3">
+          <li class="flex items-center gap-3 px-4 py-2.5">
             <button
               (click)="toggle(item)"
-              class="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border"
-              [class.border-blue-600]="item.state === 'inCart'"
-              [class.bg-blue-600]="item.state === 'inCart'"
-              [class.border-gray-300]="item.state !== 'inCart'"
-              [class.dark:border-neutral-600]="item.state !== 'inCart'"
+              class="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full border-2 transition-colors"
+              [class.border-tint]="item.state === 'inCart'"
+              [class.bg-tint]="item.state === 'inCart'"
+              [class.border-label-3]="item.state !== 'inCart'"
               [attr.aria-label]="item.state === 'inCart' ? 'Abwählen' : 'Eingepackt'"
             >
               @if (item.state === 'inCart') {
-                <svg class="h-4 w-4 text-white" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24">
+                <svg class="h-4 w-4 text-on-tint" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" d="m5 13 4 4 10-11" />
                 </svg>
               }
@@ -71,93 +72,96 @@ interface PlanRow {
             }
 
             @if (isPending(item)) {
-              <span class="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400" title="wird synchronisiert"></span>
+              <span class="h-1.5 w-1.5 shrink-0 rounded-full bg-warn" title="wird synchronisiert"></span>
             }
 
-            <span class="flex-1" [class.line-through]="item.state === 'inCart'" [class.opacity-50]="item.state === 'inCart'">
+            <span
+              class="flex-1 text-[17px]"
+              [class.line-through]="item.state === 'inCart'"
+              [class.text-label-3]="item.state === 'inCart'"
+            >
               {{ item.display_name }}
               @if (item.amount_text) {
-                <span class="text-sm opacity-60"> · {{ item.amount_text }}</span>
+                <span class="text-[15px] text-label-2"> · {{ item.amount_text }}</span>
               }
             </span>
 
-            <button (click)="remove(item)" class="shrink-0 px-2 text-lg opacity-40" aria-label="Entfernen">×</button>
+            <button (click)="remove(item)" class="shrink-0 px-1.5 text-label-3" aria-label="Entfernen">
+              <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M6 6l12 12M18 6 6 18" />
+              </svg>
+            </button>
           </li>
         }
       </ul>
     }
 
     @if (shopping.cartCount() > 0) {
-      <div class="fixed inset-x-0 bottom-16 z-10 mx-auto max-w-xl px-4 pb-2">
+      <div class="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-10 mx-auto max-w-xl px-4 pb-2">
         @if (!completing()) {
-          <button (click)="completing.set(true)" class="w-full rounded-xl bg-emerald-600 py-3 font-medium text-white shadow-lg">
+          <button (click)="completing.set(true)" class="btn btn-primary w-full shadow-lg">
             Einkauf abschließen ({{ shopping.cartCount() }})
           </button>
         } @else {
-          <div class="space-y-2 rounded-xl border border-gray-200 bg-white p-3 shadow-lg dark:border-neutral-800 dark:bg-neutral-900">
-            <input
-              type="number"
-              [(ngModel)]="totalPrice"
-              placeholder="Gesamtpreis (optional)"
-              class="w-full rounded-lg border border-gray-300 bg-transparent px-3 py-2 dark:border-neutral-700"
-            />
+          <div class="ios-card space-y-2 p-3 shadow-lg">
+            <input type="number" [(ngModel)]="totalPrice" placeholder="Gesamtpreis (optional)" class="field-2" />
             <div class="flex gap-2">
-              <button (click)="completing.set(false)" class="flex-1 rounded-lg border border-gray-300 py-2 dark:border-neutral-700">Abbrechen</button>
-              <button (click)="complete()" [disabled]="busy()" class="flex-1 rounded-lg bg-emerald-600 py-2 font-medium text-white disabled:opacity-50">Abschließen</button>
+              <button (click)="completing.set(false)" class="btn btn-secondary flex-1">Abbrechen</button>
+              <button (click)="complete()" [disabled]="busy()" class="btn btn-primary flex-1">Abschließen</button>
             </div>
           </div>
         }
       </div>
     }
 
-    <!-- check-off dialog: quantity, then an expiry/size per package -->
+    <!-- check-off sheet: quantity, then an expiry/size per package -->
     @if (coItem(); as item) {
-      <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-        <div class="w-full max-w-sm rounded-2xl bg-white p-4 shadow-xl dark:bg-neutral-900">
-          <h2 class="text-lg font-semibold">{{ item.display_name }}</h2>
+      <button type="button" class="sheet-backdrop" aria-label="Schließen" (click)="closeCheckoff()"></button>
+      <div class="sheet" role="dialog" aria-modal="true">
+        <div class="grabber"></div>
+        <h2 class="pb-1 pt-2 text-center text-title2 font-bold">{{ item.display_name }}</h2>
 
-          @if (coStep() === 1) {
-            <label class="mt-3 block text-sm">
-              Wie viele Packungen?
-              <input type="number" min="1" [(ngModel)]="coQty" class="mt-1 w-full rounded-lg border border-gray-300 bg-transparent px-3 py-2 dark:border-neutral-700" />
-            </label>
-            <div class="mt-4 flex gap-2">
-              <button (click)="closeCheckoff()" class="flex-1 rounded-lg border border-gray-300 py-2 dark:border-neutral-700">Abbrechen</button>
-              <button (click)="step1Next()" class="flex-1 rounded-lg bg-blue-600 py-2 font-medium text-white">
-                {{ needsStep2() ? 'Weiter' : 'Eingepackt' }}
-              </button>
-            </div>
-          } @else {
-            @if (coProduct()?.can_expire === 'expiry') {
-              <div class="mt-3 flex items-end gap-2">
-                <label class="flex-1 text-sm">
-                  Alle auf
-                  <input type="date" [(ngModel)]="coSameDate" class="mt-1 w-full rounded-lg border border-gray-300 bg-transparent px-3 py-2 dark:border-neutral-700" />
-                </label>
-                <button (click)="applySameDate()" class="rounded-lg bg-gray-200 px-3 py-2 text-sm dark:bg-neutral-800">Setzen</button>
-              </div>
-            }
-
-            <ul class="mt-3 max-h-72 space-y-2 overflow-y-auto">
-              @for (r of coRows; track $index; let i = $index) {
-                <li class="flex items-center gap-2">
-                  <span class="w-6 shrink-0 text-sm opacity-50">{{ i + 1 }}.</span>
-                  @if (coProduct()?.tracking_type === 'counter') {
-                    <input type="number" min="1" [(ngModel)]="r.size" placeholder="Größe" class="w-20 rounded-lg border border-gray-300 bg-transparent px-2 py-2 dark:border-neutral-700" />
-                  }
-                  @if (coProduct()?.can_expire === 'expiry') {
-                    <input type="date" [(ngModel)]="r.expiry" class="min-w-0 flex-1 rounded-lg border border-gray-300 bg-transparent px-2 py-2 dark:border-neutral-700" />
-                  }
-                </li>
-              }
-            </ul>
-
-            <div class="mt-4 flex gap-2">
-              <button (click)="coStep.set(1)" class="flex-1 rounded-lg border border-gray-300 py-2 dark:border-neutral-700">Zurück</button>
-              <button (click)="confirmCheckoff()" class="flex-1 rounded-lg bg-blue-600 py-2 font-medium text-white">Eingepackt</button>
+        @if (coStep() === 1) {
+          <label class="mt-2 block text-[15px] font-medium text-label-2">
+            Wie viele Packungen?
+            <input type="number" min="1" [(ngModel)]="coQty" class="field-2 mt-1.5" />
+          </label>
+          <div class="mt-4 flex gap-2">
+            <button (click)="closeCheckoff()" class="btn btn-secondary flex-1">Abbrechen</button>
+            <button (click)="step1Next()" class="btn btn-primary flex-1">
+              {{ needsStep2() ? 'Weiter' : 'Eingepackt' }}
+            </button>
+          </div>
+        } @else {
+          @if (coProduct()?.can_expire === 'expiry') {
+            <div class="mt-3 flex items-end gap-2">
+              <label class="flex-1 text-[15px] font-medium text-label-2">
+                Alle auf
+                <input type="date" [(ngModel)]="coSameDate" class="field-2 mt-1.5" />
+              </label>
+              <button (click)="applySameDate()" class="btn btn-secondary px-4">Setzen</button>
             </div>
           }
-        </div>
+
+          <ul class="mt-3 max-h-72 space-y-2 overflow-y-auto">
+            @for (r of coRows; track $index; let i = $index) {
+              <li class="flex items-center gap-2">
+                <span class="w-6 shrink-0 text-[15px] tabular-nums text-label-3">{{ i + 1 }}.</span>
+                @if (coProduct()?.tracking_type === 'counter') {
+                  <input type="number" min="1" [(ngModel)]="r.size" placeholder="Größe" class="field-2 w-20 px-2" />
+                }
+                @if (coProduct()?.can_expire === 'expiry') {
+                  <input type="date" [(ngModel)]="r.expiry" class="field-2 min-w-0 flex-1 px-2" />
+                }
+              </li>
+            }
+          </ul>
+
+          <div class="mt-4 flex gap-2">
+            <button (click)="coStep.set(1)" class="btn btn-secondary flex-1">Zurück</button>
+            <button (click)="confirmCheckoff()" class="btn btn-primary flex-1">Eingepackt</button>
+          </div>
+        }
       </div>
     }
   `,

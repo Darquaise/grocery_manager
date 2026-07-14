@@ -4,21 +4,6 @@ export function statusLabel(value: number): string {
   return STATUS_LABELS[Math.max(0, Math.min(STATUS_LABELS.length - 1, Math.round(value)))];
 }
 
-/** A product is "low" once it reaches/falls below its reorder threshold. */
-export function isLow(p: Pick<Product, 'is_low'>): boolean {
-  return p.is_low;
-}
-
-/** Human-readable current stock for the inventory list, per tracking type. */
-export function formatValue(p: Product): string {
-  if (p.tracking_type === 'status') {
-    const base = statusLabel(p.current_level ?? 0);
-    const refill = p.refill_count ?? 0;
-    return refill > 0 ? `${base} + ${refill}` : base;
-  }
-  return String(p.total_units);
-}
-
 // ── dates / age ───────────────────────────────────────────────────────────────
 
 function startOfDay(d: Date): number {
@@ -62,6 +47,18 @@ export function stockCaption(p: Pick<Product, 'can_expire' | 'current_expiry_dat
   if (p.can_expire === 'expiry') return p.current_expiry_date ? expiryAgo(p.current_expiry_date) : null;
   if (p.can_expire === 'purchaseDate') return p.current_purchase_date ? ageSince(p.current_purchase_date) : null;
   return null;
+}
+
+/** Urgency of the current package's expiry, for colouring the caption. */
+export function captionTone(
+  p: Pick<Product, 'can_expire' | 'current_expiry_date'>,
+): 'normal' | 'warn' | 'danger' {
+  if (p.can_expire === 'expiry' && p.current_expiry_date) {
+    const days = daysBetween(new Date().toISOString(), new Date(p.current_expiry_date));
+    if (days < 0) return 'danger';
+    if (days <= 2) return 'warn';
+  }
+  return 'normal';
 }
 
 export function stockItemCaption(

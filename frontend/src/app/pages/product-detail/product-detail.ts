@@ -34,145 +34,145 @@ interface FormModel {
   selector: 'app-product-detail',
   imports: [FormsModule],
   template: `
-    <header class="flex items-center gap-2 p-4">
-      <button (click)="back()" class="text-sm text-blue-600" aria-label="Zurück">‹ Zurück</button>
-      <h1 class="flex-1 truncate text-center text-lg font-semibold">
+    <header class="flex items-center gap-1 px-2 pb-1 pt-2">
+      <button (click)="back()" class="flex items-center gap-0.5 pr-2 text-tint" aria-label="Zurück">
+        <svg class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="m15 6-6 6 6 6" />
+        </svg>
+        <span class="text-[17px]">Zurück</span>
+      </button>
+      <h1 class="flex-1 truncate px-2 text-center text-headline font-semibold">
         {{ isNew() ? 'Neues Produkt' : form.name }}
       </h1>
-      <span class="w-14"></span>
+      <span class="w-[76px] shrink-0"></span>
     </header>
 
     <!-- Stock (existing products only) -->
     @if (!isNew() && prod(); as p) {
-      <section class="mx-4 mb-4 rounded-xl border border-gray-200 p-4 dark:border-neutral-800">
-        <p class="mb-3 text-xs font-semibold uppercase tracking-wide opacity-50">Bestand</p>
-
-        @if (p.tracking_type === 'status') {
-          <!-- current package -->
-          @if (p.stock.length === 0) {
-            <p class="mb-3 text-sm opacity-60">Kein Bestand.</p>
-          } @else {
-            <div class="grid grid-cols-5 gap-1">
-              @for (lvl of [4, 3, 2, 1, 0]; track lvl) {
-                <button
-                  (click)="setLevel(lvl)"
-                  class="rounded-lg border px-1 py-2 text-xs leading-tight"
-                  [class.border-blue-600]="p.current_level === lvl"
-                  [class.bg-blue-600]="p.current_level === lvl"
-                  [class.text-white]="p.current_level === lvl"
-                  [class.border-gray-300]="p.current_level !== lvl"
-                  [class.dark:border-neutral-700]="p.current_level !== lvl"
-                >
-                  {{ status(lvl) }}
-                </button>
-              }
-            </div>
-            @if (caption(p); as cap) {
-              <p class="mt-2 text-center text-xs opacity-50">{{ cap }}</p>
-            }
-          }
-
-          <!-- refill stock -->
-          <div class="mt-4 flex items-center justify-between border-t border-gray-100 pt-3 dark:border-neutral-800">
-            <span class="text-sm opacity-70">Nachfüllbestand</span>
-            <div class="flex items-center gap-3">
-              <button
-                (click)="removeRefill()"
-                [disabled]="(p.refill_count ?? 0) === 0"
-                class="h-9 w-9 rounded-full border border-gray-300 text-xl disabled:opacity-30 dark:border-neutral-700"
-              >−</button>
-              <span class="min-w-6 text-center text-lg font-semibold">{{ p.refill_count }}</span>
-              <button (click)="addPackage()" class="h-9 w-9 rounded-full border border-gray-300 text-xl dark:border-neutral-700">+</button>
-            </div>
-          </div>
-        } @else {
-          <!-- counter: total + stack -->
-          <div class="mb-3 text-center">
-            <span class="text-3xl font-semibold">{{ p.total_units }}</span>
-            <span class="ml-1 text-sm opacity-50">gesamt</span>
-          </div>
-
-          <ul class="space-y-2">
-            @for (s of p.stock; track s.id; let first = $first) {
-              <li class="flex items-center gap-3 rounded-lg border border-gray-200 px-3 py-2 dark:border-neutral-800">
-                @if (first) {
-                  <button (click)="changeRemaining(-1)" class="h-8 w-8 shrink-0 rounded-full border border-gray-300 text-lg dark:border-neutral-700">−</button>
-                }
-                <div class="min-w-0 flex-1 text-center">
-                  <span class="font-semibold">{{ s.remaining }}</span>
-                  <span class="text-sm opacity-50"> / {{ s.size }}</span>
-                  @if (itemCaption(p, s); as cap) {
-                    <span class="block text-xs opacity-50">{{ cap }}</span>
-                  }
-                </div>
-                @if (first) {
-                  <button (click)="changeRemaining(1)" class="h-8 w-8 shrink-0 rounded-full border border-gray-300 text-lg dark:border-neutral-700">+</button>
-                } @else {
-                  <span class="w-8 shrink-0"></span>
-                }
-              </li>
-            }
+      <section class="mx-4 mb-5">
+        <h2 class="section-header">Bestand</h2>
+        <div class="ios-card p-4">
+          @if (p.tracking_type === 'status') {
+            <!-- current package -->
             @if (p.stock.length === 0) {
-              <li class="text-sm opacity-60">Kein Bestand.</li>
+              <p class="text-[15px] text-label-2">Kein Bestand.</p>
+            } @else {
+              <div class="flex gap-1 rounded-[10px] bg-fill p-1">
+                @for (lvl of [0, 1, 2, 3, 4]; track lvl) {
+                  <button
+                    (click)="setLevel(lvl)"
+                    class="flex-1 rounded-[8px] px-1 py-2 text-[11px] font-semibold leading-tight transition-colors"
+                    [style.backgroundColor]="p.current_level === lvl ? levelColor(lvl) : 'transparent'"
+                    [style.color]="p.current_level === lvl ? '#fff' : 'var(--c-label-2)'"
+                  >
+                    {{ status(lvl) }}
+                  </button>
+                }
+              </div>
+              @if (caption(p); as cap) {
+                <p class="mt-2 text-center text-[13px] text-label-2">{{ cap }}</p>
+              }
             }
-          </ul>
 
-          <button (click)="addPackage()" class="mt-3 w-full rounded-lg border border-gray-300 py-2 text-sm dark:border-neutral-700">
-            + Paket
-          </button>
-        }
-
-        <!-- add-package panel -->
-        @if (adding()) {
-          <div class="mt-3 space-y-2 rounded-lg bg-gray-50 p-3 dark:bg-neutral-800/50">
-            @if (p.tracking_type === 'counter') {
-              <label class="block text-sm">
-                Paketgröße
-                <input type="number" [(ngModel)]="addSize" class="mt-1 w-full rounded-lg border border-gray-300 bg-transparent px-3 py-2 dark:border-neutral-700" />
-              </label>
-            }
-            @if (p.can_expire === 'expiry') {
-              <label class="block text-sm">
-                Ablaufdatum
-                <input type="date" [(ngModel)]="addDate" class="mt-1 w-full rounded-lg border border-gray-300 bg-transparent px-3 py-2 dark:border-neutral-700" />
-              </label>
-            } @else if (p.can_expire === 'purchaseDate') {
-              <label class="block text-sm">
-                Kaufdatum
-                <input type="date" [(ngModel)]="addDate" class="mt-1 w-full rounded-lg border border-gray-300 bg-transparent px-3 py-2 dark:border-neutral-700" />
-              </label>
-            }
-            <div class="flex gap-2">
-              <button (click)="closeAdd()" class="flex-1 rounded-lg border border-gray-300 py-2 text-sm dark:border-neutral-700">Abbrechen</button>
-              <button (click)="confirmAdd()" class="flex-1 rounded-lg bg-blue-600 py-2 text-sm font-medium text-white">Hinzufügen</button>
+            <!-- refill stock -->
+            <div class="mt-4 flex items-center justify-between border-t border-separator pt-4">
+              <span class="text-[15px] text-label-2">Nachfüllbestand</span>
+              <div class="flex items-center gap-3">
+                <button
+                  (click)="removeRefill()"
+                  [disabled]="(p.refill_count ?? 0) === 0"
+                  class="flex h-9 w-9 items-center justify-center rounded-full bg-fill text-label active:bg-surface-press disabled:opacity-30"
+                  aria-label="Nachfüllpaket entfernen"
+                >
+                  <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" d="M5 12h14" />
+                  </svg>
+                </button>
+                <span class="min-w-[1.5ch] text-center font-rounded text-[19px] font-semibold tabular-nums">
+                  {{ p.refill_count }}
+                </span>
+                <button
+                  (click)="addPackage()"
+                  class="flex h-9 w-9 items-center justify-center rounded-full bg-fill text-label active:bg-surface-press"
+                  aria-label="Paket hinzufügen"
+                >
+                  <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" d="M12 5v14M5 12h14" />
+                  </svg>
+                </button>
+              </div>
             </div>
-          </div>
-        }
+          } @else {
+            <!-- counter: total + stack -->
+            <div class="mb-4 text-center">
+              <span class="font-rounded text-[40px] font-bold leading-none tabular-nums">{{ p.total_units }}</span>
+              <span class="ml-1 text-[15px] text-label-2">gesamt</span>
+            </div>
+
+            <ul class="space-y-2">
+              @for (s of p.stock; track s.id; let first = $first) {
+                <li class="flex items-center gap-3 rounded-[12px] bg-fill px-3 py-2">
+                  @if (first) {
+                    <button (click)="changeRemaining(-1)" class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface text-label active:bg-surface-press" aria-label="Eins weniger">
+                      <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24"><path stroke-linecap="round" d="M5 12h14" /></svg>
+                    </button>
+                  }
+                  <div class="min-w-0 flex-1 text-center">
+                    <span class="font-rounded font-semibold tabular-nums">{{ s.remaining }}</span>
+                    <span class="text-[15px] text-label-2"> / {{ s.size }}</span>
+                    @if (itemCaption(p, s); as cap) {
+                      <span class="block text-[12px] text-label-2">{{ cap }}</span>
+                    }
+                  </div>
+                  @if (first) {
+                    <button (click)="changeRemaining(1)" class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface text-label active:bg-surface-press" aria-label="Eins mehr">
+                      <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24"><path stroke-linecap="round" d="M12 5v14M5 12h14" /></svg>
+                    </button>
+                  } @else {
+                    <span class="w-8 shrink-0"></span>
+                  }
+                </li>
+              }
+              @if (p.stock.length === 0) {
+                <li class="text-[15px] text-label-2">Kein Bestand.</li>
+              }
+            </ul>
+
+            <button (click)="addPackage()" class="btn btn-secondary mt-3 w-full">
+              <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" d="M12 5v14M5 12h14" /></svg>
+              Paket
+            </button>
+          }
+        </div>
       </section>
     }
 
     <!-- Settings (collapsible) -->
-    <section class="px-4">
+    <section class="px-4 pb-8">
       @if (!isNew()) {
         <button
           (click)="settingsOpen.set(!settingsOpen())"
-          class="flex w-full items-center justify-between py-2 text-xs font-semibold uppercase tracking-wide opacity-50"
+          class="section-header flex w-full items-center justify-between"
         >
           <span>Einstellungen</span>
-          <span>{{ settingsOpen() ? '▾' : '▸' }}</span>
+          <svg class="h-4 w-4 transition-transform" [class.rotate-180]="settingsOpen()" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="m6 9 6 6 6-6" />
+          </svg>
         </button>
+      } @else {
+        <h2 class="section-header">Neues Produkt</h2>
       }
 
       @if (isNew() || settingsOpen()) {
-        <div class="space-y-3">
-          <label class="block text-sm">
-            Name
-            <input [(ngModel)]="form.name" class="mt-1 w-full rounded-lg border border-gray-300 bg-transparent px-3 py-2 dark:border-neutral-700" />
+        <div class="space-y-4">
+          <label class="block">
+            <span class="mb-1.5 block px-1 text-[13px] font-medium text-label-2">Name</span>
+            <input [(ngModel)]="form.name" class="field" />
           </label>
 
-          <label class="block text-sm">
-            Kategorie
-            <select [(ngModel)]="form.category_id" class="mt-1 w-full rounded-lg border border-gray-300 bg-transparent px-3 py-2 dark:border-neutral-700">
+          <label class="block">
+            <span class="mb-1.5 block px-1 text-[13px] font-medium text-label-2">Kategorie</span>
+            <select [(ngModel)]="form.category_id" class="field select">
               <option [ngValue]="null">Keine</option>
               @for (c of categories(); track c.id) {
                 <option [ngValue]="c.id">{{ c.name }}</option>
@@ -180,9 +180,9 @@ interface FormModel {
             </select>
           </label>
 
-          <label class="block text-sm">
-            Lagerort
-            <select [(ngModel)]="form.location_id" class="mt-1 w-full rounded-lg border border-gray-300 bg-transparent px-3 py-2 dark:border-neutral-700">
+          <label class="block">
+            <span class="mb-1.5 block px-1 text-[13px] font-medium text-label-2">Lagerort</span>
+            <select [(ngModel)]="form.location_id" class="field select">
               <option [ngValue]="null">Keiner</option>
               @for (l of locations(); track l.id) {
                 <option [ngValue]="l.id">{{ l.name }}</option>
@@ -190,17 +190,17 @@ interface FormModel {
             </select>
           </label>
 
-          <label class="block text-sm" for="pd-package-size">
-            Paketgröße
-            <span class="mt-0.5 block text-xs font-normal opacity-50">
+          <label class="block" for="pd-package-size">
+            <span class="mb-1 block px-1 text-[13px] font-medium text-label-2">Paketgröße</span>
+            <span class="mb-1.5 block px-1 text-[12px] text-label-3">
               1 = einzeln, als Status (z.B. Milch). Größer = Zähler (Stück pro Packung).
             </span>
-            <input id="pd-package-size" type="number" min="1" [(ngModel)]="form.package_size" class="mt-1 w-full rounded-lg border border-gray-300 bg-transparent px-3 py-2 dark:border-neutral-700" />
+            <input id="pd-package-size" type="number" min="1" [(ngModel)]="form.package_size" class="field" />
           </label>
 
-          <label class="block text-sm">
-            Haltbarkeit
-            <select [(ngModel)]="form.can_expire" class="mt-1 w-full rounded-lg border border-gray-300 bg-transparent px-3 py-2 dark:border-neutral-700">
+          <label class="block">
+            <span class="mb-1.5 block px-1 text-[13px] font-medium text-label-2">Haltbarkeit</span>
+            <select [(ngModel)]="form.can_expire" class="field select">
               <option value="none">Nein</option>
               <option value="expiry">Ablaufdatum</option>
               <option value="purchaseDate">Kaufdatum (Alter)</option>
@@ -208,9 +208,9 @@ interface FormModel {
           </label>
 
           @if (formStatus()) {
-            <label class="block text-sm" for="pd-reorder-level">
-              Auf die Liste ab Status
-              <select id="pd-reorder-level" [(ngModel)]="form.reorder_status_level" class="mt-1 w-full rounded-lg border border-gray-300 bg-transparent px-3 py-2 dark:border-neutral-700">
+            <label class="block" for="pd-reorder-level">
+              <span class="mb-1.5 block px-1 text-[13px] font-medium text-label-2">Auf die Liste ab Status</span>
+              <select id="pd-reorder-level" [(ngModel)]="form.reorder_status_level" class="field select">
                 <option [ngValue]="null">Nie automatisch</option>
                 <option [ngValue]="4">Voll</option>
                 <option [ngValue]="3">Fast voll</option>
@@ -220,42 +220,72 @@ interface FormModel {
               </select>
             </label>
             @if (form.reorder_status_level !== null) {
-              <label class="block text-sm">
-                … und Nachfüllbestand höchstens
-                <input type="number" min="0" [(ngModel)]="form.reorder_refill_count" placeholder="0" class="mt-1 w-full rounded-lg border border-gray-300 bg-transparent px-3 py-2 dark:border-neutral-700" />
+              <label class="block">
+                <span class="mb-1.5 block px-1 text-[13px] font-medium text-label-2">… und Nachfüllbestand höchstens</span>
+                <input type="number" min="0" [(ngModel)]="form.reorder_refill_count" placeholder="0" class="field" />
               </label>
             }
           } @else {
-            <label class="block text-sm">
-              Auf die Liste ab Gesamtmenge
-              <span class="mt-0.5 block text-xs font-normal opacity-50">
+            <label class="block">
+              <span class="mb-1 block px-1 text-[13px] font-medium text-label-2">Auf die Liste ab Gesamtmenge</span>
+              <span class="mb-1.5 block px-1 text-[12px] text-label-3">
                 Bei dieser Stückzahl (oder weniger) landet das Produkt automatisch auf der Liste.
               </span>
-              <input type="number" [(ngModel)]="form.reorder_total_units" placeholder="leer = nie automatisch" class="mt-1 w-full rounded-lg border border-gray-300 bg-transparent px-3 py-2 dark:border-neutral-700" />
+              <input type="number" [(ngModel)]="form.reorder_total_units" placeholder="leer = nie automatisch" class="field" />
             </label>
           }
 
-          <label class="block text-sm">
-            Notiz
-            <textarea [(ngModel)]="form.notes" rows="2" class="mt-1 w-full rounded-lg border border-gray-300 bg-transparent px-3 py-2 dark:border-neutral-700"></textarea>
+          <label class="block">
+            <span class="mb-1.5 block px-1 text-[13px] font-medium text-label-2">Notiz</span>
+            <textarea [(ngModel)]="form.notes" rows="2" class="field"></textarea>
           </label>
 
           @if (error()) {
-            <p class="text-sm text-red-600">{{ error() }}</p>
+            <p class="px-1 text-[15px] text-danger">{{ error() }}</p>
           }
 
-          <button (click)="save()" [disabled]="saving()" class="w-full rounded-lg bg-blue-600 py-2.5 font-medium text-white disabled:opacity-50">
+          <button (click)="save()" [disabled]="saving()" class="btn btn-primary w-full">
             {{ isNew() ? 'Anlegen' : 'Speichern' }}
           </button>
 
           @if (!isNew()) {
-            <button (click)="remove()" class="w-full rounded-lg border border-red-300 py-2.5 text-red-600 dark:border-red-900">
-              Löschen
-            </button>
+            <button (click)="remove()" class="btn btn-danger w-full">Löschen</button>
           }
         </div>
       }
     </section>
+
+    <!-- add-package sheet -->
+    @if (adding() && prod(); as p) {
+      <button type="button" class="sheet-backdrop" aria-label="Schließen" (click)="closeAdd()"></button>
+      <div class="sheet" role="dialog" aria-modal="true">
+        <div class="grabber"></div>
+        <h2 class="pb-2 pt-2 text-center text-title2 font-bold">Paket hinzufügen</h2>
+        <div class="space-y-3">
+          @if (p.tracking_type === 'counter') {
+            <label class="block">
+              <span class="mb-1.5 block px-1 text-[13px] font-medium text-label-2">Paketgröße</span>
+              <input type="number" [(ngModel)]="addSize" class="field-2" />
+            </label>
+          }
+          @if (p.can_expire === 'expiry') {
+            <label class="block">
+              <span class="mb-1.5 block px-1 text-[13px] font-medium text-label-2">Ablaufdatum</span>
+              <input type="date" [(ngModel)]="addDate" class="field-2" />
+            </label>
+          } @else if (p.can_expire === 'purchaseDate') {
+            <label class="block">
+              <span class="mb-1.5 block px-1 text-[13px] font-medium text-label-2">Kaufdatum</span>
+              <input type="date" [(ngModel)]="addDate" class="field-2" />
+            </label>
+          }
+        </div>
+        <div class="mt-4 flex gap-2">
+          <button (click)="closeAdd()" class="btn btn-secondary flex-1">Abbrechen</button>
+          <button (click)="confirmAdd()" class="btn btn-primary flex-1">Hinzufügen</button>
+        </div>
+      </div>
+    }
   `,
 })
 export class ProductDetail {
@@ -298,6 +328,13 @@ export class ProductDetail {
 
   formStatus(): boolean {
     return this.form.package_size <= 1;
+  }
+
+  /** Colour for a chosen status level (mirrors the stock-meter gauge). */
+  levelColor(lvl: number): string {
+    if (lvl >= 3) return 'var(--c-good)';
+    if (lvl === 2) return 'var(--c-warn)';
+    return 'var(--c-danger)';
   }
 
   constructor() {

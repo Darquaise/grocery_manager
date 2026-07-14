@@ -1,8 +1,109 @@
 @import "tailwindcss";
 
-/* Follow the iOS light/dark mode automatically. */
+/* ============================================================
+   Grocery Manager — iOS / iPadOS-native design system.
+
+   Semantic tokens live on :root and flip with the system
+   light/dark setting. `@theme inline` re-exports them as
+   Tailwind utilities, so templates use bg-surface / text-tint /
+   border-separator / text-largetitle instead of hard-coded
+   colours and dark: variants.
+   ============================================================ */
+
 :root {
   color-scheme: light dark;
+
+  /* Brand tint — a slightly muted fresh green */
+  --c-tint: #23a05f;
+  --c-tint-press: #1b8a50;
+  --c-on-tint: #ffffff;
+
+  /* Backgrounds (iOS grouped) */
+  --c-bg: #f2f2f7;
+  --c-surface: #ffffff;
+  --c-surface-press: #ececf1;
+  --c-fill: #e9e9ee; /* secondary fill: gray buttons, segmented track */
+  --c-fill-2: #ededf2; /* tertiary fill: chips inside cards */
+
+  /* Text */
+  --c-label: #1c1c1e;
+  --c-label-2: #84848c;
+  --c-label-3: #b3b3ba;
+
+  /* Hairline separators */
+  --c-separator: rgba(60, 60, 67, 0.16);
+
+  /* Status / freshness */
+  --c-good: #23a05f;
+  --c-warn: #ef8f0a;
+  --c-danger: #e23b32;
+
+  /* Bar material (nav / tab bar) */
+  --c-bar: rgba(249, 249, 251, 0.8);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --c-tint: #36c77c;
+    --c-tint-press: #2ba869;
+    --c-on-tint: #ffffff;
+
+    --c-bg: #000000;
+    --c-surface: #1c1c1e;
+    --c-surface-press: #2a2a2c;
+    --c-fill: #2c2c2e;
+    --c-fill-2: #2c2c2e;
+
+    --c-label: #ffffff;
+    --c-label-2: #98989f;
+    --c-label-3: #6a6a70;
+
+    --c-separator: rgba(84, 84, 88, 0.5);
+
+    --c-good: #36c77c;
+    --c-warn: #ffb340;
+    --c-danger: #ff453a;
+
+    --c-bar: rgba(20, 20, 22, 0.8);
+  }
+}
+
+@theme inline {
+  --color-tint: var(--c-tint);
+  --color-tint-press: var(--c-tint-press);
+  --color-on-tint: var(--c-on-tint);
+  --color-bg: var(--c-bg);
+  --color-surface: var(--c-surface);
+  --color-surface-press: var(--c-surface-press);
+  --color-fill: var(--c-fill);
+  --color-fill-2: var(--c-fill-2);
+  --color-label: var(--c-label);
+  --color-label-2: var(--c-label-2);
+  --color-label-3: var(--c-label-3);
+  --color-separator: var(--c-separator);
+  --color-good: var(--c-good);
+  --color-warn: var(--c-warn);
+  --color-danger: var(--c-danger);
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue",
+    system-ui, sans-serif;
+  --font-rounded: "SF Pro Rounded", ui-rounded, "SF Pro Text", -apple-system,
+    system-ui, sans-serif;
+
+  --text-largetitle: 2.125rem;
+  --text-largetitle--line-height: 1.16;
+  --text-largetitle--letter-spacing: -0.022em;
+  --text-title2: 1.375rem;
+  --text-title2--line-height: 1.2;
+  --text-title2--letter-spacing: -0.018em;
+  --text-headline: 1.0625rem;
+  --text-headline--line-height: 1.3;
+  --text-headline--letter-spacing: -0.012em;
+
+  --radius-group: 14px;
+  --radius-button: 12px;
+  --radius-field: 10px;
+  --radius-sheet: 22px;
 }
 
 html,
@@ -11,13 +112,208 @@ body {
   margin: 0;
 }
 
+body {
+  font-family: var(--font-sans);
+  background: var(--c-bg);
+  color: var(--c-label);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Accessibility floor: a visible keyboard focus ring everywhere. */
+:focus-visible {
+  outline: 2px solid var(--c-tint);
+  outline-offset: 2px;
+}
+
+/* ── Reusable component classes ──────────────────────────────────────────── */
+
+@layer components {
+  /* Grouped inset card + hairline list separators (inset to the text). */
+  .ios-card {
+    background: var(--c-surface);
+    border-radius: var(--radius-group);
+    overflow: hidden;
+  }
+
+  .ios-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .ios-list > li {
+    position: relative;
+  }
+  .ios-list > li + li::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 1rem;
+    right: 0;
+    height: 1px;
+    background: var(--c-separator);
+  }
+  /* deeper inset when rows carry a leading accessory */
+  .ios-list--inset > li + li::before {
+    left: 3.25rem;
+  }
+
+  /* Small grey section caption above a group. */
+  .section-header {
+    padding: 0 1rem 0.4rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    letter-spacing: -0.006em;
+    color: var(--c-label-2);
+  }
+
+  /* Buttons. */
+  .btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: var(--radius-button);
+    padding: 0.8125rem 1rem;
+    font-size: 1.0625rem;
+    font-weight: 600;
+    line-height: 1.2;
+    letter-spacing: -0.012em;
+    transition:
+      background-color 0.15s ease,
+      opacity 0.15s ease,
+      transform 0.08s ease;
+  }
+  .btn:active {
+    transform: scale(0.98);
+  }
+  .btn:disabled {
+    opacity: 0.45;
+  }
+  .btn-primary {
+    background: var(--c-tint);
+    color: var(--c-on-tint);
+  }
+  .btn-primary:active {
+    background: var(--c-tint-press);
+  }
+  .btn-secondary {
+    background: var(--c-fill);
+    color: var(--c-tint);
+  }
+  .btn-danger {
+    background: var(--c-fill);
+    color: var(--c-danger);
+  }
+
+  /* Inputs. `.field` sits on the page background; `.field-2` sits in a card. */
+  .field,
+  .field-2 {
+    width: 100%;
+    border: none;
+    border-radius: var(--radius-field);
+    padding: 0.6875rem 0.875rem;
+    font-size: 1.0625rem;
+    color: var(--c-label);
+    appearance: none;
+  }
+  .field {
+    background: var(--c-surface);
+  }
+  .field-2 {
+    background: var(--c-fill);
+  }
+  .field::placeholder,
+  .field-2::placeholder {
+    color: var(--c-label-3);
+  }
+
+  /* Native <select> with a custom chevron (added on top of .field/.field-2). */
+  .select {
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%238a8a8e' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><path d='m6 9 6 6 6-6'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 0.75rem center;
+    padding-right: 2.25rem;
+  }
+
+  /* Bottom sheet + backdrop. */
+  .sheet-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    background: rgba(0, 0, 0, 0.4);
+    animation: gm-fade 0.2s ease;
+  }
+  .sheet {
+    position: fixed;
+    inset-inline: 0;
+    bottom: 0;
+    z-index: 51;
+    margin-inline: auto;
+    max-width: 30rem;
+    background: var(--c-surface);
+    border-top-left-radius: var(--radius-sheet);
+    border-top-right-radius: var(--radius-sheet);
+    padding: 0 1rem calc(1.25rem + env(safe-area-inset-bottom));
+    box-shadow: 0 -10px 44px rgba(0, 0, 0, 0.22);
+    animation: gm-sheet-up 0.34s cubic-bezier(0.32, 0.72, 0, 1);
+  }
+  .grabber {
+    width: 36px;
+    height: 5px;
+    border-radius: 3px;
+    background: var(--c-label-3);
+    opacity: 0.55;
+    margin: 0.5rem auto 0.25rem;
+  }
+
+  /* Translucent material used by the tab bar. */
+  .bar-material {
+    background: var(--c-bar);
+    backdrop-filter: saturate(180%) blur(20px);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+  }
+}
+
+@keyframes gm-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes gm-sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sheet,
+  .sheet-backdrop {
+    animation: none;
+  }
+  .btn:active {
+    transform: none;
+  }
+}
+
 /* Drag-and-drop reordering (settings lists). The preview is appended to <body>,
    so these classes live here (not in a component) and are added at runtime by
    Angular CDK — static analysis can't see the usage, hence the suppressions. */
 /*noinspection CssUnusedSymbol*/
 .cdk-drag-preview {
   box-sizing: border-box;
-  border-radius: 0.5rem;
+  border-radius: var(--radius-field);
   box-shadow:
     0 5px 5px -3px rgb(0 0 0 / 0.2),
     0 8px 10px 1px rgb(0 0 0 / 0.14),
