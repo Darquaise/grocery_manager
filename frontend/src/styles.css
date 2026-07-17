@@ -122,6 +122,7 @@ body {
 
 * {
   -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 
 /* Accessibility floor: a visible keyboard focus ring everywhere. */
