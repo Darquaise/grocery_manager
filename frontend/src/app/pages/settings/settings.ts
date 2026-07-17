@@ -1,6 +1,7 @@
 import { Component, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
+import { TranslatePipe } from '@ngx-translate/core';
 
 import { User } from '../../models';
 import { AuthService } from '../../services/auth';
@@ -8,22 +9,33 @@ import { CategoriesService } from '../../services/categories';
 import { LocationsService } from '../../services/locations';
 import { UsersService } from '../../services/users';
 import { EditableListComponent } from '../../components/editable-list';
+import { LanguageSelector } from '../../components/language-selector';
 
 @Component({
   selector: 'app-settings',
-  imports: [FormsModule, EditableListComponent],
+  imports: [FormsModule, TranslatePipe, EditableListComponent, LanguageSelector],
   template: `
     <header class="px-4 pb-2 pt-3">
-      <h1 class="text-largetitle font-bold">Einstellungen</h1>
+      <h1 class="text-largetitle font-bold">{{ 'settings.title' | translate }}</h1>
     </header>
 
     <div class="space-y-5 px-4 pb-4">
-      <app-editable-list title="Kategorien" [store]="categoriesSvc" addPlaceholder="Neue Kategorie…" />
-      <app-editable-list title="Lagerorte" [store]="locationsSvc" addPlaceholder="Neuer Lagerort…" />
+      <app-language-selector variant="row" [persist]="true" />
+
+      <app-editable-list
+        [title]="'settings.categories' | translate"
+        [store]="categoriesSvc"
+        [addPlaceholder]="'settings.newCategory' | translate"
+      />
+      <app-editable-list
+        [title]="'settings.locations' | translate"
+        [store]="locationsSvc"
+        [addPlaceholder]="'settings.newLocation' | translate"
+      />
 
       <!-- User colours -->
       <section class="ios-card p-4">
-        <h2 class="pb-3 text-[13px] font-semibold text-label-2">Nutzer &amp; Farben</h2>
+        <h2 class="pb-3 text-[13px] font-semibold text-label-2">{{ 'settings.usersColors' | translate }}</h2>
         <ul class="space-y-3">
           @for (u of users.users(); track u.id) {
             <li class="flex items-center gap-3">
@@ -47,7 +59,7 @@ import { EditableListComponent } from '../../components/editable-list';
         (click)="logout()"
         class="ios-card w-full p-4 text-center text-[17px] font-medium text-danger active:bg-surface-press"
       >
-        Abmelden
+        {{ 'settings.logout' | translate }}
       </button>
     </div>
   `,

@@ -35,6 +35,9 @@ class User(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     name: str = Field(index=True, unique=True)
     color: str = "#3b82f6"
+    # UI language (BCP-47-ish short code, e.g. "en" / "de"). None until the user
+    # has logged in once and their current selection was persisted.
+    language: str | None = None
     password_hash: str
     created_at: datetime = Field(default_factory=_now)
 

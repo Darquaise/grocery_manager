@@ -8,6 +8,8 @@ import {
   moveItemInArray,
 } from '@angular/cdk/drag-drop';
 
+import { TranslatePipe } from '@ngx-translate/core';
+
 import { ListItem, ListStore } from '../models';
 
 interface Row {
@@ -22,7 +24,7 @@ interface Row {
  */
 @Component({
   selector: 'app-editable-list',
-  imports: [FormsModule, CdkDropList, CdkDrag, CdkDragHandle],
+  imports: [FormsModule, CdkDropList, CdkDrag, CdkDragHandle, TranslatePipe],
   template: `
     <section class="ios-card">
       <button
@@ -58,7 +60,7 @@ interface Row {
                 }
               </ul>
             } @else {
-              <p class="py-2 text-[15px] text-label-2">Noch keine Einträge.</p>
+              <p class="py-2 text-[15px] text-label-2">{{ 'editableList.noEntries' | translate }}</p>
             }
             <button
               (click)="startEdit()"
@@ -67,7 +69,7 @@ interface Row {
               <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" d="m16.5 4.5 3 3L8 19l-4 1 1-4L16.5 4.5Z"/>
               </svg>
-              Bearbeiten
+              {{ 'editableList.edit' | translate }}
             </button>
           } @else {
             <ul cdkDropList (cdkDropListDropped)="drop($event)" class="space-y-2">
@@ -80,7 +82,7 @@ interface Row {
                     type="button"
                     cdkDragHandle
                     class="cursor-grab touch-none px-2 py-2 text-label-3 active:cursor-grabbing"
-                    aria-label="Verschieben"
+                    [attr.aria-label]="'editableList.move' | translate"
                   >
                     <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                       <path stroke-linecap="round" d="M4 7h16M4 12h16M4 17h16"/>
@@ -95,7 +97,7 @@ interface Row {
                   <button
                     (click)="removeRow($index)"
                     class="px-3 py-2 text-danger"
-                    aria-label="Löschen"
+                    [attr.aria-label]="'editableList.delete' | translate"
                   >
                     <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" d="M6 6l12 12M18 6 6 18"/>
@@ -109,13 +111,13 @@ interface Row {
               (click)="addRow()"
               class="mt-2 flex w-full items-center justify-center gap-1.5 rounded-[12px] border border-dashed border-separator py-2 text-[15px] font-medium text-label-2"
             >
-              <span class="text-lg leading-none">+</span> Zeile hinzufügen
+              <span class="text-lg leading-none">+</span> {{ 'editableList.addRow' | translate }}
             </button>
 
             <div class="mt-3 flex gap-2">
-              <button (click)="cancelEdit()" class="btn btn-secondary flex-1 text-[15px]">Abbrechen</button>
+              <button (click)="cancelEdit()" class="btn btn-secondary flex-1 text-[15px]">{{ 'editableList.cancel' | translate }}</button>
               <button (click)="save()" [disabled]="saving()" class="btn btn-primary flex-1 text-[15px]">
-                Speichern
+                {{ 'editableList.save' | translate }}
               </button>
             </div>
           }
@@ -127,7 +129,7 @@ interface Row {
 export class EditableListComponent implements OnInit {
   readonly title = input.required<string>();
   readonly store = input.required<ListStore>();
-  readonly addPlaceholder = input('Neuer Eintrag…');
+  readonly addPlaceholder = input('');
 
   readonly items = signal<ListItem[]>([]);
   readonly expanded = signal(false);

@@ -1,6 +1,7 @@
 import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
+import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 
 import {
   Category,
@@ -32,17 +33,17 @@ interface FormModel {
 
 @Component({
   selector: 'app-product-detail',
-  imports: [FormsModule],
+  imports: [FormsModule, TranslatePipe],
   template: `
     <header class="flex items-center gap-1 px-2 pb-1 pt-2">
-      <button (click)="back()" class="flex items-center gap-0.5 pr-2 text-tint" aria-label="Zurück">
+      <button (click)="back()" class="flex items-center gap-0.5 pr-2 text-tint" [attr.aria-label]="'productDetail.back' | translate">
         <svg class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" d="m15 6-6 6 6 6" />
         </svg>
-        <span class="text-[17px]">Zurück</span>
+        <span class="text-[17px]">{{ 'productDetail.back' | translate }}</span>
       </button>
       <h1 class="flex-1 truncate px-2 text-center text-headline font-semibold">
-        {{ isNew() ? 'Neues Produkt' : form.name }}
+        {{ isNew() ? ('productDetail.newProduct' | translate) : form.name }}
       </h1>
       <span class="w-[76px] shrink-0"></span>
     </header>
@@ -50,12 +51,12 @@ interface FormModel {
     <!-- Stock (existing products only) -->
     @if (!isNew() && prod(); as p) {
       <section class="mx-4 mb-5">
-        <h2 class="section-header">Bestand</h2>
+        <h2 class="section-header">{{ 'productDetail.stock' | translate }}</h2>
         <div class="ios-card p-4">
           @if (p.tracking_type === 'status') {
             <!-- current package -->
             @if (p.stock.length === 0) {
-              <p class="text-[15px] text-label-2">Kein Bestand.</p>
+              <p class="text-[15px] text-label-2">{{ 'productDetail.noStock' | translate }}</p>
             } @else {
               <div class="flex gap-1 rounded-[10px] bg-fill p-1">
                 @for (lvl of [0, 1, 2, 3, 4]; track lvl) {
@@ -76,13 +77,13 @@ interface FormModel {
 
             <!-- refill stock -->
             <div class="mt-4 flex items-center justify-between border-t border-separator pt-4">
-              <span class="text-[15px] text-label-2">Nachfüllbestand</span>
+              <span class="text-[15px] text-label-2">{{ 'productDetail.refillStock' | translate }}</span>
               <div class="flex items-center gap-3">
                 <button
                   (click)="removeRefill()"
                   [disabled]="(p.refill_count ?? 0) === 0"
                   class="flex h-9 w-9 items-center justify-center rounded-full bg-fill text-label active:bg-surface-press disabled:opacity-30"
-                  aria-label="Nachfüllpaket entfernen"
+                  [attr.aria-label]="'productDetail.removeRefill' | translate"
                 >
                   <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
                     <path stroke-linecap="round" d="M5 12h14" />
@@ -94,7 +95,7 @@ interface FormModel {
                 <button
                   (click)="addPackage()"
                   class="flex h-9 w-9 items-center justify-center rounded-full bg-fill text-label active:bg-surface-press"
-                  aria-label="Paket hinzufügen"
+                  [attr.aria-label]="'productDetail.addPackageAria' | translate"
                 >
                   <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
                     <path stroke-linecap="round" d="M12 5v14M5 12h14" />
@@ -106,14 +107,14 @@ interface FormModel {
             <!-- counter: total + stack -->
             <div class="mb-4 text-center">
               <span class="font-rounded text-[40px] font-bold leading-none tabular-nums">{{ p.total_units }}</span>
-              <span class="ml-1 text-[15px] text-label-2">gesamt</span>
+              <span class="ml-1 text-[15px] text-label-2">{{ 'productDetail.total' | translate }}</span>
             </div>
 
             <ul class="space-y-2">
               @for (s of p.stock; track s.id; let first = $first) {
                 <li class="flex items-center gap-3 rounded-[12px] bg-fill px-3 py-2">
                   @if (first) {
-                    <button (click)="changeRemaining(-1)" class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface text-label active:bg-surface-press" aria-label="Eins weniger">
+                    <button (click)="changeRemaining(-1)" class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface text-label active:bg-surface-press" [attr.aria-label]="'productDetail.oneLess' | translate">
                       <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24"><path stroke-linecap="round" d="M5 12h14" /></svg>
                     </button>
                   }
@@ -125,7 +126,7 @@ interface FormModel {
                     }
                   </div>
                   @if (first) {
-                    <button (click)="changeRemaining(1)" class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface text-label active:bg-surface-press" aria-label="Eins mehr">
+                    <button (click)="changeRemaining(1)" class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface text-label active:bg-surface-press" [attr.aria-label]="'productDetail.oneMore' | translate">
                       <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24"><path stroke-linecap="round" d="M12 5v14M5 12h14" /></svg>
                     </button>
                   } @else {
@@ -134,13 +135,13 @@ interface FormModel {
                 </li>
               }
               @if (p.stock.length === 0) {
-                <li class="text-[15px] text-label-2">Kein Bestand.</li>
+                <li class="text-[15px] text-label-2">{{ 'productDetail.noStock' | translate }}</li>
               }
             </ul>
 
             <button (click)="addPackage()" class="btn btn-secondary mt-3 w-full">
               <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" d="M12 5v14M5 12h14" /></svg>
-              Paket
+              {{ 'productDetail.package' | translate }}
             </button>
           }
         </div>
@@ -154,26 +155,26 @@ interface FormModel {
           (click)="settingsOpen.set(!settingsOpen())"
           class="section-header flex w-full items-center justify-between"
         >
-          <span>Einstellungen</span>
+          <span>{{ 'productDetail.settings' | translate }}</span>
           <svg class="h-4 w-4 transition-transform" [class.rotate-180]="settingsOpen()" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" d="m6 9 6 6 6-6" />
           </svg>
         </button>
       } @else {
-        <h2 class="section-header">Neues Produkt</h2>
+        <h2 class="section-header">{{ 'productDetail.newProduct' | translate }}</h2>
       }
 
       @if (isNew() || settingsOpen()) {
         <div class="space-y-4">
           <label class="block">
-            <span class="mb-1.5 block px-1 text-[13px] font-medium text-label-2">Name</span>
+            <span class="mb-1.5 block px-1 text-[13px] font-medium text-label-2">{{ 'productDetail.name' | translate }}</span>
             <input [(ngModel)]="form.name" class="field" />
           </label>
 
           <label class="block">
-            <span class="mb-1.5 block px-1 text-[13px] font-medium text-label-2">Kategorie</span>
+            <span class="mb-1.5 block px-1 text-[13px] font-medium text-label-2">{{ 'productDetail.category' | translate }}</span>
             <select [(ngModel)]="form.category_id" class="field select">
-              <option [ngValue]="null">Keine</option>
+              <option [ngValue]="null">{{ 'productDetail.categoryNone' | translate }}</option>
               @for (c of categories(); track c.id) {
                 <option [ngValue]="c.id">{{ c.name }}</option>
               }
@@ -181,9 +182,9 @@ interface FormModel {
           </label>
 
           <label class="block">
-            <span class="mb-1.5 block px-1 text-[13px] font-medium text-label-2">Lagerort</span>
+            <span class="mb-1.5 block px-1 text-[13px] font-medium text-label-2">{{ 'productDetail.location' | translate }}</span>
             <select [(ngModel)]="form.location_id" class="field select">
-              <option [ngValue]="null">Keiner</option>
+              <option [ngValue]="null">{{ 'productDetail.locationNone' | translate }}</option>
               @for (l of locations(); track l.id) {
                 <option [ngValue]="l.id">{{ l.name }}</option>
               }
@@ -191,52 +192,52 @@ interface FormModel {
           </label>
 
           <label class="block" for="pd-package-size">
-            <span class="mb-1 block px-1 text-[13px] font-medium text-label-2">Paketgröße</span>
+            <span class="mb-1 block px-1 text-[13px] font-medium text-label-2">{{ 'productDetail.packageSize' | translate }}</span>
             <span class="mb-1.5 block px-1 text-[12px] text-label-3">
-              1 = einzeln, als Status (z.B. Milch). Größer = Zähler (Stück pro Packung).
+              {{ 'productDetail.packageSizeHint' | translate }}
             </span>
             <input id="pd-package-size" type="number" min="1" [(ngModel)]="form.package_size" class="field" />
           </label>
 
           <label class="block">
-            <span class="mb-1.5 block px-1 text-[13px] font-medium text-label-2">Haltbarkeit</span>
+            <span class="mb-1.5 block px-1 text-[13px] font-medium text-label-2">{{ 'productDetail.shelfLife' | translate }}</span>
             <select [(ngModel)]="form.can_expire" class="field select">
-              <option value="none">Nein</option>
-              <option value="expiry">Ablaufdatum</option>
-              <option value="purchaseDate">Kaufdatum (Alter)</option>
+              <option value="none">{{ 'productDetail.shelfLifeNo' | translate }}</option>
+              <option value="expiry">{{ 'productDetail.shelfLifeExpiry' | translate }}</option>
+              <option value="purchaseDate">{{ 'productDetail.shelfLifePurchase' | translate }}</option>
             </select>
           </label>
 
           @if (formStatus()) {
             <label class="block" for="pd-reorder-level">
-              <span class="mb-1.5 block px-1 text-[13px] font-medium text-label-2">Auf die Liste ab Status</span>
+              <span class="mb-1.5 block px-1 text-[13px] font-medium text-label-2">{{ 'productDetail.reorderFromStatus' | translate }}</span>
               <select id="pd-reorder-level" [(ngModel)]="form.reorder_status_level" class="field select">
-                <option [ngValue]="null">Nie automatisch</option>
-                <option [ngValue]="4">Voll</option>
-                <option [ngValue]="3">Fast voll</option>
-                <option [ngValue]="2">Mittel</option>
-                <option [ngValue]="1">Knapp</option>
-                <option [ngValue]="0">Leer</option>
+                <option [ngValue]="null">{{ 'productDetail.neverAuto' | translate }}</option>
+                <option [ngValue]="4">{{ 'status.full' | translate }}</option>
+                <option [ngValue]="3">{{ 'status.almostFull' | translate }}</option>
+                <option [ngValue]="2">{{ 'status.medium' | translate }}</option>
+                <option [ngValue]="1">{{ 'status.low' | translate }}</option>
+                <option [ngValue]="0">{{ 'status.empty' | translate }}</option>
               </select>
             </label>
             @if (form.reorder_status_level !== null) {
               <label class="block">
-                <span class="mb-1.5 block px-1 text-[13px] font-medium text-label-2">… und Nachfüllbestand höchstens</span>
+                <span class="mb-1.5 block px-1 text-[13px] font-medium text-label-2">{{ 'productDetail.reorderRefillMax' | translate }}</span>
                 <input type="number" min="0" [(ngModel)]="form.reorder_refill_count" placeholder="0" class="field" />
               </label>
             }
           } @else {
             <label class="block">
-              <span class="mb-1 block px-1 text-[13px] font-medium text-label-2">Auf die Liste ab Gesamtmenge</span>
+              <span class="mb-1 block px-1 text-[13px] font-medium text-label-2">{{ 'productDetail.reorderFromTotal' | translate }}</span>
               <span class="mb-1.5 block px-1 text-[12px] text-label-3">
-                Bei dieser Stückzahl (oder weniger) landet das Produkt automatisch auf der Liste.
+                {{ 'productDetail.reorderFromTotalHint' | translate }}
               </span>
-              <input type="number" [(ngModel)]="form.reorder_total_units" placeholder="leer = nie automatisch" class="field" />
+              <input type="number" [(ngModel)]="form.reorder_total_units" [placeholder]="'productDetail.reorderTotalPlaceholder' | translate" class="field" />
             </label>
           }
 
           <label class="block">
-            <span class="mb-1.5 block px-1 text-[13px] font-medium text-label-2">Notiz</span>
+            <span class="mb-1.5 block px-1 text-[13px] font-medium text-label-2">{{ 'productDetail.note' | translate }}</span>
             <textarea [(ngModel)]="form.notes" rows="2" class="field"></textarea>
           </label>
 
@@ -245,11 +246,11 @@ interface FormModel {
           }
 
           <button (click)="save()" [disabled]="saving()" class="btn btn-primary w-full">
-            {{ isNew() ? 'Anlegen' : 'Speichern' }}
+            {{ (isNew() ? 'productDetail.create' : 'productDetail.save') | translate }}
           </button>
 
           @if (!isNew()) {
-            <button (click)="remove()" class="btn btn-danger w-full">Löschen</button>
+            <button (click)="remove()" class="btn btn-danger w-full">{{ 'productDetail.delete' | translate }}</button>
           }
         </div>
       }
@@ -257,32 +258,32 @@ interface FormModel {
 
     <!-- add-package sheet -->
     @if (adding() && prod(); as p) {
-      <button type="button" class="sheet-backdrop" aria-label="Schließen" (click)="closeAdd()"></button>
+      <button type="button" class="sheet-backdrop" [attr.aria-label]="'shopping.close' | translate" (click)="closeAdd()"></button>
       <div class="sheet" role="dialog" aria-modal="true">
         <div class="grabber"></div>
-        <h2 class="pb-2 pt-2 text-center text-title2 font-bold">Paket hinzufügen</h2>
+        <h2 class="pb-2 pt-2 text-center text-title2 font-bold">{{ 'productDetail.addPackageTitle' | translate }}</h2>
         <div class="space-y-3">
           @if (p.tracking_type === 'counter') {
             <label class="block">
-              <span class="mb-1.5 block px-1 text-[13px] font-medium text-label-2">Paketgröße</span>
+              <span class="mb-1.5 block px-1 text-[13px] font-medium text-label-2">{{ 'productDetail.packageSize' | translate }}</span>
               <input type="number" [(ngModel)]="addSize" class="field-2" />
             </label>
           }
           @if (p.can_expire === 'expiry') {
             <label class="block">
-              <span class="mb-1.5 block px-1 text-[13px] font-medium text-label-2">Ablaufdatum</span>
+              <span class="mb-1.5 block px-1 text-[13px] font-medium text-label-2">{{ 'productDetail.expiryDate' | translate }}</span>
               <input type="date" [(ngModel)]="addDate" class="field-2" />
             </label>
           } @else if (p.can_expire === 'purchaseDate') {
             <label class="block">
-              <span class="mb-1.5 block px-1 text-[13px] font-medium text-label-2">Kaufdatum</span>
+              <span class="mb-1.5 block px-1 text-[13px] font-medium text-label-2">{{ 'productDetail.purchaseDate' | translate }}</span>
               <input type="date" [(ngModel)]="addDate" class="field-2" />
             </label>
           }
         </div>
         <div class="mt-4 flex gap-2">
-          <button (click)="closeAdd()" class="btn btn-secondary flex-1">Abbrechen</button>
-          <button (click)="confirmAdd()" class="btn btn-primary flex-1">Hinzufügen</button>
+          <button (click)="closeAdd()" class="btn btn-secondary flex-1">{{ 'productDetail.cancel' | translate }}</button>
+          <button (click)="confirmAdd()" class="btn btn-primary flex-1">{{ 'productDetail.add' | translate }}</button>
         </div>
       </div>
     }
@@ -296,6 +297,7 @@ export class ProductDetail {
   private locationsSvc = inject(LocationsService);
   private connectivity = inject(ConnectivityService);
   private sync = inject(SyncService);
+  private translate = inject(TranslateService);
 
   readonly status = statusLabel;
   readonly caption = stockCaption;
@@ -533,7 +535,7 @@ export class ProductDetail {
 
   async save(): Promise<void> {
     if (!this.form.name.trim()) {
-      this.error.set('Name darf nicht leer sein.');
+      this.error.set(this.translate.instant('productDetail.nameEmpty'));
       return;
     }
     this.saving.set(true);
@@ -553,14 +555,14 @@ export class ProductDetail {
         this.settingsOpen.set(false);
       }
     } catch {
-      this.error.set('Speichern fehlgeschlagen.');
+      this.error.set(this.translate.instant('productDetail.saveFailed'));
     } finally {
       this.saving.set(false);
     }
   }
 
   async remove(): Promise<void> {
-    if (!confirm('Produkt wirklich löschen?')) return;
+    if (!confirm(this.translate.instant('productDetail.confirmDelete'))) return;
     await this.products.remove(this.id);
     await this.router.navigateByUrl('/');
   }

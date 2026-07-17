@@ -1,22 +1,27 @@
 import { Component, inject, signal } from '@angular/core';
+import { TranslatePipe } from '@ngx-translate/core';
 
 import { Trip } from '../../models';
 import { ShoppingService } from '../../services/shopping';
 import { UsersService } from '../../services/users';
+import { LanguageService } from '../../services/language';
+
+const DATE_LOCALES: Record<string, string> = { en: 'en-GB', de: 'de-DE' };
 
 @Component({
   selector: 'app-archive',
+  imports: [TranslatePipe],
   template: `
     <header class="px-4 pb-2 pt-3">
-      <h1 class="text-largetitle font-bold">Archiv</h1>
+      <h1 class="text-largetitle font-bold">{{ 'archive.title' | translate }}</h1>
     </header>
 
     @if (loading()) {
-      <p class="px-4 text-[15px] text-label-2">Lädt…</p>
+      <p class="px-4 text-[15px] text-label-2">{{ 'archive.loading' | translate }}</p>
     } @else if (trips().length === 0) {
       <div class="px-8 pt-16 text-center">
-        <p class="text-[17px] font-medium text-label">Noch nichts hier</p>
-        <p class="mt-1 text-[15px] text-label-2">Abgeschlossene Einkäufe landen im Archiv.</p>
+        <p class="text-[17px] font-medium text-label">{{ 'archive.emptyTitle' | translate }}</p>
+        <p class="mt-1 text-[15px] text-label-2">{{ 'archive.emptyHint' | translate }}</p>
       </div>
     } @else {
       <ul class="space-y-3 px-4">
@@ -30,7 +35,7 @@ import { UsersService } from '../../services/users';
                     <span class="h-2 w-2 rounded-full" [style.background-color]="users.colorOf(trip.completed_by)"></span>
                     {{ userName(trip.completed_by) }} ·
                   }
-                  {{ trip.items.length }} Artikel
+                  {{ 'archive.items' | translate: { count: trip.items.length } }}
                 </span>
               </span>
               @if (trip.total_price != null) {
@@ -59,6 +64,7 @@ import { UsersService } from '../../services/users';
 export class Archive {
   private shopping = inject(ShoppingService);
   protected users = inject(UsersService);
+  private lang = inject(LanguageService);
 
   readonly trips = signal<Trip[]>([]);
   readonly loading = signal(true);
@@ -93,7 +99,8 @@ export class Archive {
 
   formatDate(iso: string | null): string {
     if (!iso) return '';
-    return new Date(iso).toLocaleString('de-DE', {
+    const locale = DATE_LOCALES[this.lang.current()] ?? 'en-GB';
+    return new Date(iso).toLocaleString(locale, {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',

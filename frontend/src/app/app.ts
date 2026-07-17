@@ -1,6 +1,7 @@
 import { Component, computed, effect, inject, signal } from '@angular/core';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { SwUpdate, VersionReadyEvent } from '@angular/service-worker';
+import { TranslatePipe } from '@ngx-translate/core';
 import { filter } from 'rxjs';
 
 import { AuthService } from './services/auth';
@@ -12,7 +13,7 @@ import { ConflictDialog } from './components/conflict-dialog';
 
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, ConflictDialog],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, ConflictDialog, TranslatePipe],
   templateUrl: './app.html',
 })
 export class App {

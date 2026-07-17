@@ -7,6 +7,8 @@ export interface User {
   id: number;
   name: string;
   color: string;
+  /** Account UI language ("en"/"de"). null until first login persisted it. */
+  language: string | null;
 }
 
 export interface Category {
@@ -119,9 +121,6 @@ export interface Trip {
   total_price: number | null;
   items: TripItem[];
 }
-
-/** Ordinal status levels (for `status`-tracked products), index = value 0..4. */
-export const STATUS_LABELS = ['Leer', 'Knapp', 'Mittel', 'Fast voll', 'Voll'] as const;
 
 /** Minimal shape shared by Category and Location (for the editable settings list). */
 export interface ListItem {

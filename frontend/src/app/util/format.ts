@@ -1,7 +1,32 @@
-import { Product, STATUS_LABELS, StockItem } from '../models';
+import { Product, StockItem } from '../models';
+
+// ── i18n wiring ────────────────────────────────────────────────────────────
+// These are plain functions (not Angular services), so `LanguageService` injects
+// the active translator + locale here whenever the language changes.
+type Translator = (key: string, params?: Record<string, unknown>) => string;
+
+let translate: Translator = (key) => key;
+let dateLocale = 'en-GB';
+
+const DATE_LOCALES: Record<string, string> = { en: 'en-GB', de: 'de-DE' };
+
+export function configureFormat(fn: Translator, lang: string): void {
+  translate = fn;
+  dateLocale = DATE_LOCALES[lang] ?? 'en-GB';
+}
+
+/** Ordinal status labels for `status`-tracked products, index = value 0..4. */
+const STATUS_KEYS = [
+  'status.empty',
+  'status.low',
+  'status.medium',
+  'status.almostFull',
+  'status.full',
+] as const;
 
 export function statusLabel(value: number): string {
-  return STATUS_LABELS[Math.max(0, Math.min(STATUS_LABELS.length - 1, Math.round(value)))];
+  const i = Math.max(0, Math.min(STATUS_KEYS.length - 1, Math.round(value)));
+  return translate(STATUS_KEYS[i]);
 }
 
 // ── dates / age ───────────────────────────────────────────────────────────────
@@ -16,30 +41,30 @@ function daysBetween(fromIso: string, to = new Date()): number {
 }
 
 export function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('de-DE', {
+  return new Date(iso).toLocaleDateString(dateLocale, {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
   });
 }
 
-/** Days until an expiry date as a short German label, e.g. "in 3 Tagen", "heute",
- * "abgelaufen". */
+/** Days until an expiry date as a short localized label, e.g. "in 3 days",
+ * "today", "expired …". */
 export function expiryAgo(iso: string): string {
   const days = daysBetween(new Date().toISOString(), new Date(iso)); // positive = future
-  if (days > 1) return `in ${days} Tagen`;
-  if (days === 1) return 'morgen';
-  if (days === 0) return 'heute';
-  if (days === -1) return 'gestern abgelaufen';
-  return `seit ${-days} Tagen abgelaufen`;
+  if (days > 1) return translate('format.expiryInDays', { count: days });
+  if (days === 1) return translate('format.expiryTomorrow');
+  if (days === 0) return translate('format.expiryToday');
+  if (days === -1) return translate('format.expiredYesterday');
+  return translate('format.expiredDaysAgo', { count: -days });
 }
 
-/** Age since a purchase date, e.g. "neu", "vor 3 Tagen". */
+/** Age since a purchase date, e.g. "new", "3 days ago". */
 export function ageSince(iso: string): string {
   const days = daysBetween(iso);
-  if (days <= 0) return 'neu';
-  if (days === 1) return 'seit gestern';
-  return `vor ${days} Tagen`;
+  if (days <= 0) return translate('format.ageNew');
+  if (days === 1) return translate('format.ageYesterday');
+  return translate('format.ageDaysAgo', { count: days });
 }
 
 /** The small expiry/age caption shown under a name (null = nothing to show). */

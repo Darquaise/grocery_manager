@@ -20,7 +20,7 @@ STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 async def lifespan(_app: FastAPI):
     # In production Alembic owns the schema (the container runs `alembic upgrade
     # head` before uvicorn); for local dev create_all is a convenience. Seeding
-    # (default categories + the two accounts) is idempotent and always runs.
+    # (the two accounts) is idempotent and always runs.
     if settings.db_auto_create:
         SQLModel.metadata.create_all(engine)
     with Session(engine) as session:

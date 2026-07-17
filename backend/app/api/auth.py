@@ -19,6 +19,7 @@ class UserOut(BaseModel):
     id: int
     name: str
     color: str
+    language: str | None = None
 
 
 @router.post("/login", response_model=UserOut)
@@ -27,7 +28,7 @@ def login(data: LoginIn, request: Request, session: Session = Depends(get_sessio
     if not user or not verify_password(user.password_hash, data.password):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "invalid credentials")
     request.session["user_id"] = user.id
-    return UserOut(id=user.id, name=user.name, color=user.color)
+    return user
 
 
 @router.post("/logout")
@@ -38,4 +39,4 @@ def logout(request: Request):
 
 @router.get("/me", response_model=UserOut)
 def me(user: User = Depends(current_user)):
-    return UserOut(id=user.id, name=user.name, color=user.color)
+    return user

@@ -1,6 +1,7 @@
 import { Component, OnDestroy, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
+import { TranslatePipe } from '@ngx-translate/core';
 
 import { PlanEntry, Product, ShoppingItem } from '../../models';
 import { ShoppingService } from '../../services/shopping';
@@ -16,10 +17,10 @@ interface PlanRow {
 
 @Component({
   selector: 'app-shopping',
-  imports: [FormsModule],
+  imports: [FormsModule, TranslatePipe],
   template: `
     <header class="px-4 pb-2 pt-3">
-      <h1 class="text-largetitle font-bold">Einkauf</h1>
+      <h1 class="text-largetitle font-bold">{{ 'shopping.title' | translate }}</h1>
     </header>
 
     <form (ngSubmit)="add()" class="flex flex-wrap gap-2 px-4 pb-3">
@@ -27,11 +28,11 @@ interface PlanRow {
         name="name"
         [(ngModel)]="newName"
         list="product-names"
-        placeholder="Hinzufügen"
+        [placeholder]="'shopping.add' | translate"
         class="field min-w-0 flex-1"
       />
-      <input name="amount" [(ngModel)]="newAmount" placeholder="Menge" class="field w-24 shrink-0" />
-      <button type="submit" class="btn btn-primary shrink-0 px-4" aria-label="Hinzufügen">
+      <input name="amount" [(ngModel)]="newAmount" [placeholder]="'shopping.amount' | translate" class="field w-24 shrink-0" />
+      <button type="submit" class="btn btn-primary shrink-0 px-4" [attr.aria-label]="'shopping.add' | translate">
         <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14M5 12h14" />
         </svg>
@@ -45,8 +46,8 @@ interface PlanRow {
 
     @if (shopping.items().length === 0) {
       <div class="px-8 pt-16 text-center">
-        <p class="text-[17px] font-medium text-label">Liste ist leer</p>
-        <p class="mt-1 text-[15px] text-label-2">Tippe oben etwas ein, um es aufzunehmen.</p>
+        <p class="text-[17px] font-medium text-label">{{ 'shopping.emptyTitle' | translate }}</p>
+        <p class="mt-1 text-[15px] text-label-2">{{ 'shopping.emptyHint' | translate }}</p>
       </div>
     } @else {
       <ul class="ios-card ios-list mx-4">
@@ -58,7 +59,7 @@ interface PlanRow {
               [class.border-tint]="item.state === 'inCart'"
               [class.bg-tint]="item.state === 'inCart'"
               [class.border-label-3]="item.state !== 'inCart'"
-              [attr.aria-label]="item.state === 'inCart' ? 'Abwählen' : 'Eingepackt'"
+              [attr.aria-label]="(item.state === 'inCart' ? 'shopping.deselect' : 'shopping.packed') | translate"
             >
               @if (item.state === 'inCart') {
                 <svg class="h-4 w-4 text-on-tint" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24">
@@ -72,7 +73,7 @@ interface PlanRow {
             }
 
             @if (isPending(item)) {
-              <span class="h-1.5 w-1.5 shrink-0 rounded-full bg-warn" title="wird synchronisiert"></span>
+              <span class="h-1.5 w-1.5 shrink-0 rounded-full bg-warn" [title]="'shopping.syncing' | translate"></span>
             }
 
             <span
@@ -86,7 +87,7 @@ interface PlanRow {
               }
             </span>
 
-            <button (click)="remove(item)" class="shrink-0 px-1.5 text-label-3" aria-label="Entfernen">
+            <button (click)="remove(item)" class="shrink-0 px-1.5 text-label-3" [attr.aria-label]="'shopping.remove' | translate">
               <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M6 6l12 12M18 6 6 18" />
               </svg>
@@ -100,14 +101,14 @@ interface PlanRow {
       <div class="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-10 mx-auto max-w-xl px-4 pb-2">
         @if (!completing()) {
           <button (click)="completing.set(true)" class="btn btn-primary w-full shadow-lg">
-            Einkauf abschließen ({{ shopping.cartCount() }})
+            {{ 'shopping.complete' | translate: { count: shopping.cartCount() } }}
           </button>
         } @else {
           <div class="ios-card space-y-2 p-3 shadow-lg">
-            <input type="number" [(ngModel)]="totalPrice" placeholder="Gesamtpreis (optional)" class="field-2" />
+            <input type="number" [(ngModel)]="totalPrice" [placeholder]="'shopping.totalPrice' | translate" class="field-2" />
             <div class="flex gap-2">
-              <button (click)="completing.set(false)" class="btn btn-secondary flex-1">Abbrechen</button>
-              <button (click)="complete()" [disabled]="busy()" class="btn btn-primary flex-1">Abschließen</button>
+              <button (click)="completing.set(false)" class="btn btn-secondary flex-1">{{ 'shopping.cancel' | translate }}</button>
+              <button (click)="complete()" [disabled]="busy()" class="btn btn-primary flex-1">{{ 'shopping.finish' | translate }}</button>
             </div>
           </div>
         }
@@ -116,30 +117,30 @@ interface PlanRow {
 
     <!-- check-off sheet: quantity, then an expiry/size per package -->
     @if (coItem(); as item) {
-      <button type="button" class="sheet-backdrop" aria-label="Schließen" (click)="closeCheckoff()"></button>
+      <button type="button" class="sheet-backdrop" [attr.aria-label]="'shopping.close' | translate" (click)="closeCheckoff()"></button>
       <div class="sheet" role="dialog" aria-modal="true">
         <div class="grabber"></div>
         <h2 class="pb-1 pt-2 text-center text-title2 font-bold">{{ item.display_name }}</h2>
 
         @if (coStep() === 1) {
           <label class="mt-2 block text-[15px] font-medium text-label-2">
-            Wie viele Packungen?
+            {{ 'shopping.howManyPackages' | translate }}
             <input type="number" min="1" [(ngModel)]="coQty" class="field-2 mt-1.5" />
           </label>
           <div class="mt-4 flex gap-2">
-            <button (click)="closeCheckoff()" class="btn btn-secondary flex-1">Abbrechen</button>
+            <button (click)="closeCheckoff()" class="btn btn-secondary flex-1">{{ 'shopping.cancel' | translate }}</button>
             <button (click)="step1Next()" class="btn btn-primary flex-1">
-              {{ needsStep2() ? 'Weiter' : 'Eingepackt' }}
+              {{ (needsStep2() ? 'shopping.next' : 'shopping.packed') | translate }}
             </button>
           </div>
         } @else {
           @if (coProduct()?.can_expire === 'expiry') {
             <div class="mt-3 flex items-end gap-2">
               <label class="flex-1 text-[15px] font-medium text-label-2">
-                Alle auf
+                {{ 'shopping.allOn' | translate }}
                 <input type="date" [(ngModel)]="coSameDate" class="field-2 mt-1.5" />
               </label>
-              <button (click)="applySameDate()" class="btn btn-secondary px-4">Setzen</button>
+              <button (click)="applySameDate()" class="btn btn-secondary px-4">{{ 'shopping.set' | translate }}</button>
             </div>
           }
 
@@ -148,7 +149,7 @@ interface PlanRow {
               <li class="flex items-center gap-2">
                 <span class="w-6 shrink-0 text-[15px] tabular-nums text-label-3">{{ i + 1 }}.</span>
                 @if (coProduct()?.tracking_type === 'counter') {
-                  <input type="number" min="1" [(ngModel)]="r.size" placeholder="Größe" class="field-2 w-20 px-2" />
+                  <input type="number" min="1" [(ngModel)]="r.size" [placeholder]="'shopping.size' | translate" class="field-2 w-20 px-2" />
                 }
                 @if (coProduct()?.can_expire === 'expiry') {
                   <input type="date" [(ngModel)]="r.expiry" class="field-2 min-w-0 flex-1 px-2" />
@@ -158,8 +159,8 @@ interface PlanRow {
           </ul>
 
           <div class="mt-4 flex gap-2">
-            <button (click)="coStep.set(1)" class="btn btn-secondary flex-1">Zurück</button>
-            <button (click)="confirmCheckoff()" class="btn btn-primary flex-1">Eingepackt</button>
+            <button (click)="coStep.set(1)" class="btn btn-secondary flex-1">{{ 'shopping.back' | translate }}</button>
+            <button (click)="confirmCheckoff()" class="btn btn-primary flex-1">{{ 'shopping.packed' | translate }}</button>
           </div>
         }
       </div>

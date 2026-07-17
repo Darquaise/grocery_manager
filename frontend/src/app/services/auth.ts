@@ -3,12 +3,14 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 
 import { User } from '../models';
+import { LanguageService } from './language';
 
 const USER_KEY = 'grocery.user';
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private http = inject(HttpClient);
+  private language = inject(LanguageService);
 
   /** Current user, or null when logged out. Hydrated from cache so the app is
    * usable offline (the session is re-verified in the background). */
@@ -17,6 +19,7 @@ export class AuthService {
   async login(name: string, password: string): Promise<void> {
     const user = await firstValueFrom(this.http.post<User>('/api/login', { name, password }));
     this.setUser(user);
+    await this.language.applyFromAccount(user);
   }
 
   async logout(): Promise<void> {
@@ -30,6 +33,7 @@ export class AuthService {
     try {
       const user = await firstValueFrom(this.http.get<User>('/api/me'));
       this.setUser(user);
+      await this.language.applyFromAccount(user);
       return user;
     } catch (err) {
       if (err instanceof HttpErrorResponse && err.status === 401) {

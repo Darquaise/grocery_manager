@@ -1,7 +1,9 @@
-import { Component, computed, input } from '@angular/core';
+import { Component, computed, inject, input } from '@angular/core';
+import { TranslatePipe } from '@ngx-translate/core';
 
 import { Product } from '../models';
 import { statusLabel } from '../util/format';
+import { LanguageService } from '../services/language';
 
 /**
  * The glance value shown on the right of an inventory row: for status products
@@ -32,19 +34,22 @@ import { statusLabel } from '../util/format';
         >
           {{ total() }}
         </span>
-        <span class="text-[12px] text-label-3">Stk</span>
+        <span class="text-[12px] text-label-3">{{ 'inventory.units' | translate }}</span>
       </span>
     }
   `,
+  imports: [TranslatePipe],
 })
 export class StockMeter {
   readonly product = input.required<Product>();
+  private lang = inject(LanguageService);
 
   protected readonly isStatus = computed(() => this.product().tracking_type === 'status');
   protected readonly level = computed(() => this.product().current_level ?? 0);
   protected readonly refill = computed(() => this.product().refill_count ?? 0);
   protected readonly total = computed(() => this.product().total_units);
-  protected readonly word = computed(() => statusLabel(this.level()));
+  // Depend on the active language so the status word re-translates on switch.
+  protected readonly word = computed(() => (this.lang.current(), statusLabel(this.level())));
 
   protected readonly labelColor = computed(() => {
     const p = this.product();

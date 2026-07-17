@@ -1,11 +1,13 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
+import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 
 import { Category, Location, Product } from '../../models';
 import { ProductsService } from '../../services/products';
 import { CategoriesService } from '../../services/categories';
 import { LocationsService } from '../../services/locations';
+import { LanguageService } from '../../services/language';
 import { captionTone, stockCaption } from '../../util/format';
 import { StockMeter } from '../../components/stock-meter';
 
@@ -16,14 +18,14 @@ interface Group {
 
 @Component({
   selector: 'app-inventory',
-  imports: [FormsModule, RouterLink, StockMeter],
+  imports: [FormsModule, RouterLink, StockMeter, TranslatePipe],
   template: `
     <header class="flex items-end justify-between gap-3 px-4 pb-2 pt-3">
-      <h1 class="text-largetitle font-bold">Bestand</h1>
+      <h1 class="text-largetitle font-bold">{{ 'inventory.title' | translate }}</h1>
       <a
         routerLink="/products/new"
         class="mb-1 flex h-9 w-9 items-center justify-center rounded-full bg-fill text-tint active:bg-surface-press"
-        aria-label="Produkt hinzufügen"
+        [attr.aria-label]="'inventory.addProduct' | translate"
       >
         <svg class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14M5 12h14" />
@@ -42,7 +44,7 @@ interface Group {
         >
           <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-4.3-4.3M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14Z" />
         </svg>
-        <input [(ngModel)]="search" placeholder="Suchen" class="field pl-9" />
+        <input [(ngModel)]="search" [placeholder]="'inventory.search' | translate" class="field pl-9" />
       </div>
     </div>
 
@@ -56,7 +58,7 @@ interface Group {
           [class.bg-fill]="locationFilter() !== ''"
           [class.text-label]="locationFilter() !== ''"
         >
-          Alle
+          {{ 'inventory.all' | translate }}
         </button>
         @for (loc of locations(); track loc.id) {
           <button
@@ -74,12 +76,12 @@ interface Group {
     }
 
     @if (loading()) {
-      <p class="px-4 text-[15px] text-label-2">Lädt…</p>
+      <p class="px-4 text-[15px] text-label-2">{{ 'inventory.loading' | translate }}</p>
     } @else if (groups().length === 0) {
       <div class="px-8 pt-16 text-center">
-        <p class="text-[17px] font-medium text-label">Nichts gefunden</p>
+        <p class="text-[17px] font-medium text-label">{{ 'inventory.emptyTitle' | translate }}</p>
         <p class="mt-1 text-[15px] text-label-2">
-          Lege oben rechts mit „+“ dein erstes Produkt an.
+          {{ 'inventory.emptyHint' | translate }}
         </p>
       </div>
     } @else {
@@ -123,6 +125,8 @@ export class Inventory {
   private products = inject(ProductsService);
   private categories = inject(CategoriesService);
   private locationsSvc = inject(LocationsService);
+  private translate = inject(TranslateService);
+  private lang = inject(LanguageService);
 
   readonly caption = stockCaption;
 
@@ -171,7 +175,10 @@ export class Inventory {
       const products = byCategory.get(c.id);
       if (products?.length) groups.push({ name: c.name, products });
     }
-    if (noCategory.length) groups.push({ name: 'Ohne Kategorie', products: noCategory });
+    if (noCategory.length) {
+      this.lang.current(); // recompute the label when the language changes
+      groups.push({ name: this.translate.instant('inventory.noCategory'), products: noCategory });
+    }
     return groups;
   });
 

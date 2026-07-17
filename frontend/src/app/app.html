@@ -15,9 +15,9 @@
             <path stroke-linecap="round" stroke-linejoin="round" d="M3 3l18 18M8.5 8.5A5 5 0 0 0 6 12.5m12.5-.5a6.5 6.5 0 0 0-9-6M12 17h.01" />
           </svg>
           @if (sync.pending() > 0) {
-            Offline – {{ sync.pending() }} Änderung(en) folgen später
+            {{ 'offline.pending' | translate: { count: sync.pending() } }}
           } @else {
-            Offline
+            {{ 'offline.offline' | translate }}
           }
         </div>
       } @else if (sync.pending() > 0) {
@@ -28,7 +28,7 @@
           <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" d="M4 12a8 8 0 0 1 14-5.3L20 8M20 12a8 8 0 0 1-14 5.3L4 16M20 4v4h-4M4 20v-4h4" />
           </svg>
-          {{ sync.pending() }} Änderung(en) synchronisieren
+          {{ 'offline.sync' | translate: { count: sync.pending() } }}
         </button>
       }
 
@@ -52,7 +52,7 @@
               <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12 11.2 3.05c.44-.44 1.16-.44 1.6 0L21.75 12M4.5 9.75v10.13c0 .62.5 1.12 1.12 1.12H9.75v-4.88c0-.62.5-1.12 1.13-1.12h2.25c.62 0 1.12.5 1.12 1.12V21h4.13c.62 0 1.12-.5 1.12-1.12V9.75" />
             </svg>
           }
-          Bestand
+          {{ 'nav.inventory' | translate }}
         </a>
 
         <a
@@ -79,7 +79,7 @@
               {{ shopping.items().length }}
             </span>
           }
-          Einkauf
+          {{ 'nav.shopping' | translate }}
         </a>
 
         <a
@@ -100,7 +100,7 @@
               <path stroke-linecap="round" stroke-linejoin="round" d="m20.25 7.5-.63 10.63a2.25 2.25 0 0 1-2.24 2.12H6.62a2.25 2.25 0 0 1-2.24-2.12L3.75 7.5M10 11.25h4M3.38 7.5h17.25c.62 0 1.12-.5 1.12-1.13v-1.5c0-.62-.5-1.12-1.12-1.12H3.38c-.63 0-1.13.5-1.13 1.12v1.5c0 .63.5 1.13 1.13 1.13Z" />
             </svg>
           }
-          Archiv
+          {{ 'nav.archive' | translate }}
         </a>
 
         <a
@@ -121,7 +121,7 @@
               <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
             </svg>
           }
-          Mehr
+          {{ 'nav.more' | translate }}
         </a>
       </div>
     </nav>
