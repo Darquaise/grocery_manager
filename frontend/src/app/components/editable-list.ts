@@ -1,4 +1,4 @@
-import { Component, ElementRef, OnInit, inject, input, signal } from '@angular/core';
+import { Component, ElementRef, OnInit, effect, inject, input, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import {
   CdkDrag,
@@ -11,6 +11,7 @@ import {
 import { TranslatePipe } from '@ngx-translate/core';
 
 import { ListItem, ListStore } from '../models';
+import { KitchensService } from '../services/kitchens';
 
 interface Row {
   id: number | null; // null = newly added, not yet saved
@@ -62,15 +63,17 @@ interface Row {
             } @else {
               <p class="py-2 text-[15px] text-label-2">{{ 'editableList.noEntries' | translate }}</p>
             }
-            <button
-              (click)="startEdit()"
-              class="btn btn-secondary mt-3 w-full text-[15px]"
-            >
-              <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" d="m16.5 4.5 3 3L8 19l-4 1 1-4L16.5 4.5Z"/>
-              </svg>
-              {{ 'editableList.edit' | translate }}
-            </button>
+            @if (canEdit()) {
+              <button
+                (click)="startEdit()"
+                class="btn btn-secondary mt-3 w-full text-[15px]"
+              >
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="m16.5 4.5 3 3L8 19l-4 1 1-4L16.5 4.5Z"/>
+                </svg>
+                {{ 'editableList.edit' | translate }}
+              </button>
+            }
           } @else {
             <ul cdkDropList (cdkDropListDropped)="drop($event)" class="space-y-2">
               @for (row of working(); track $index) {
@@ -130,6 +133,8 @@ export class EditableListComponent implements OnInit {
   readonly title = input.required<string>();
   readonly store = input.required<ListStore>();
   readonly addPlaceholder = input('');
+  /** Read-only members see the list but cannot enter edit mode. */
+  readonly canEdit = input(true);
 
   readonly items = signal<ListItem[]>([]);
   readonly expanded = signal(false);
@@ -138,10 +143,24 @@ export class EditableListComponent implements OnInit {
   readonly saving = signal(false);
 
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly kitchens = inject(KitchensService);
+  private initialized = false;
+
+  constructor() {
+    // Reload (and drop any open edit) when the active kitchen changes.
+    effect(() => {
+      this.kitchens.activeId();
+      if (!this.initialized) return;
+      this.cancelEdit();
+      this.expanded.set(false);
+      void this.load();
+    });
+  }
 
   ngOnInit(): void {
     // Inputs (incl. the required `store`) are only available from ngOnInit on,
     // not in the constructor.
+    this.initialized = true;
     void this.load();
   }
 

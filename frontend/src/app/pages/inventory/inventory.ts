@@ -6,9 +6,11 @@ import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { Category, Location, Product } from '../../models';
 import { ProductsService } from '../../services/products';
 import { CategoriesService } from '../../services/categories';
+import { KitchensService } from '../../services/kitchens';
 import { LocationsService } from '../../services/locations';
 import { LanguageService } from '../../services/language';
-import { captionTone, stockCaption } from '../../util/format';
+import { LiveService } from '../../services/live';
+import { captionTone, urgentCaption } from '../../util/format';
 import { StockMeter } from '../../components/stock-meter';
 
 interface Group {
@@ -21,16 +23,23 @@ interface Group {
   imports: [FormsModule, RouterLink, StockMeter, TranslatePipe],
   template: `
     <header class="flex items-end justify-between gap-3 px-4 pb-2 pt-3">
-      <h1 class="text-largetitle font-bold">{{ 'inventory.title' | translate }}</h1>
-      <a
-        routerLink="/products/new"
-        class="mb-1 flex h-9 w-9 items-center justify-center rounded-full bg-fill text-tint active:bg-surface-press"
-        [attr.aria-label]="'inventory.addProduct' | translate"
-      >
-        <svg class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14M5 12h14" />
-        </svg>
-      </a>
+      <div class="min-w-0">
+        <h1 class="text-largetitle font-bold">{{ 'inventory.title' | translate }}</h1>
+        @if (kitchens.kitchens().length > 1 && kitchens.active(); as kitchen) {
+          <p class="truncate text-[13px] font-medium text-label-2">{{ kitchen.name }}</p>
+        }
+      </div>
+      @if (kitchens.canWrite()) {
+        <a
+          routerLink="/products/new"
+          class="mb-1 flex h-9 w-9 items-center justify-center rounded-full bg-fill text-tint active:bg-surface-press"
+          [attr.aria-label]="'inventory.addProduct' | translate"
+        >
+          <svg class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14M5 12h14" />
+          </svg>
+        </a>
+      }
     </header>
 
     <div class="px-4 pb-2">
@@ -125,10 +134,14 @@ export class Inventory {
   private products = inject(ProductsService);
   private categories = inject(CategoriesService);
   private locationsSvc = inject(LocationsService);
+  protected kitchens = inject(KitchensService);
   private translate = inject(TranslateService);
   private lang = inject(LanguageService);
+  private live = inject(LiveService);
 
-  readonly caption = stockCaption;
+  // Warnt über das dringendste Paket — nicht über das gerade offene, das
+  // deutlich später ablaufen kann.
+  readonly caption = urgentCaption;
 
   captionColor(p: Product): string {
     const tone = captionTone(p);
@@ -184,6 +197,8 @@ export class Inventory {
 
   constructor() {
     void this.load();
+    // Live: re-fetch whenever someone changed the kitchen's data elsewhere.
+    this.live.onChange(() => void this.load());
   }
 
   private async load(): Promise<void> {

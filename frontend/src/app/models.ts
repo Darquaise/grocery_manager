@@ -11,6 +11,57 @@ export interface User {
   language: string | null;
 }
 
+/** Member rights in a kitchen (each level includes the previous). */
+export type KitchenRole = 'read' | 'write' | 'admin';
+
+export interface Kitchen {
+  id: number;
+  name: string;
+  owner_id: number;
+  /** My effective role (the owner always acts as admin). */
+  my_role: KitchenRole;
+  is_owner: boolean;
+}
+
+export interface KitchenMember {
+  user_id: number;
+  name: string;
+  color: string;
+  role: KitchenRole;
+  is_owner: boolean;
+}
+
+/** A pending kitchen invitation, admin view (member management). */
+export interface PendingInvite {
+  id: number;
+  user_id: number;
+  name: string;
+  role: KitchenRole;
+}
+
+/** A pending kitchen invitation addressed to me (join dialog). */
+export interface KitchenInvite {
+  id: number;
+  kitchen_id: number;
+  kitchen_name: string;
+  role: KitchenRole;
+  invited_by_name: string;
+  created_at: string;
+}
+
+/** Single-use registration code (accounts are invite-only). May carry a
+ * kitchen — registering with it creates a pending kitchen invitation. */
+export interface AccountInvite {
+  id: number;
+  code: string;
+  created_at: string;
+  used_by_name: string | null;
+  used_at: string | null;
+  kitchen_id: number | null;
+  kitchen_name: string | null;
+  kitchen_role: KitchenRole | null;
+}
+
 export interface Category {
   id: number;
   name: string;
@@ -34,6 +85,8 @@ export interface StockItem {
   status_level: number | null;  // status products: 0..4
   remaining: number | null;     // counter products: units left
   size: number | null;          // counter products: package's full size
+  /** Set on the package in use, null on every queued refill. */
+  current_since: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -59,8 +112,13 @@ export interface Product {
   total_units: number;
   current_level: number | null;
   refill_count: number | null;
+  /** The in-use package — what the status buttons on the detail page act on. */
   current_expiry_date: string | null;
   current_purchase_date: string | null;
+  /** The soonest-expiring package of all — what the inventory list warns about.
+   * Differs from `current_*` when a refill expires before the open package. */
+  urgent_expiry_date: string | null;
+  urgent_purchase_date: string | null;
   is_low: boolean;
 }
 

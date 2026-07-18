@@ -1,16 +1,19 @@
+import asyncio
+import re
 from contextlib import asynccontextmanager
 from pathlib import Path
-
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from sqlmodel import Session, SQLModel
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.types import Scope
 
-from .api import auth, categories, locations, products, shopping, users
+from .api import auth, invites, kitchens, products, shopping, users
+from .api.named_lists import categories_router, locations_router
 from .config import settings
 from .db import engine
+from .events import bus
 from .seed import seed
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
@@ -21,6 +24,7 @@ async def lifespan(_app: FastAPI):
     # In production Alembic owns the schema (the container runs `alembic upgrade
     # head` before uvicorn); for local dev create_all is a convenience. Seeding
     # (the two accounts) is idempotent and always runs.
+    bus.attach_loop(asyncio.get_running_loop())
     if settings.db_auto_create:
         SQLModel.metadata.create_all(engine)
     with Session(engine) as session:
@@ -36,10 +40,31 @@ app.add_middleware(
     https_only=False,  # app sits behind a TLS-terminating nginx (sees http)
 )
 
+_KITCHEN_PATH = re.compile(r"^/api/kitchens/(\d+)(?:/|$)")
+_MUTATING = {"POST", "PATCH", "PUT", "DELETE"}
+
+
+@app.middleware("http")
+async def kitchen_change_events(request: Request, call_next):
+    """Bump the kitchen's live-update revision after every successful mutation
+    under /api/kitchens/{id}/… — new endpoints are covered automatically.
+    Mutations whose URL carries no kitchen id (invite accept, colour change)
+    bump explicitly at their endpoint instead."""
+    response = await call_next(request)
+    if request.method in _MUTATING and response.status_code < 400:
+        match = _KITCHEN_PATH.match(request.url.path)
+        if match:
+            bus.bump(int(match.group(1)))
+    return response
+
+
 app.include_router(auth.router, prefix="/api")
+app.include_router(invites.router, prefix="/api")
 app.include_router(users.router, prefix="/api")
-app.include_router(categories.router, prefix="/api")
-app.include_router(locations.router, prefix="/api")
+app.include_router(kitchens.router, prefix="/api")
+app.include_router(kitchens.my_invites_router, prefix="/api")
+app.include_router(categories_router, prefix="/api")
+app.include_router(locations_router, prefix="/api")
 app.include_router(products.router, prefix="/api")
 app.include_router(shopping.router, prefix="/api")
 

@@ -67,19 +67,30 @@ export function ageSince(iso: string): string {
   return translate('format.ageDaysAgo', { count: days });
 }
 
-/** The small expiry/age caption shown under a name (null = nothing to show). */
-export function stockCaption(p: Pick<Product, 'can_expire' | 'current_expiry_date' | 'current_purchase_date'>): string | null {
-  if (p.can_expire === 'expiry') return p.current_expiry_date ? expiryAgo(p.current_expiry_date) : null;
-  if (p.can_expire === 'purchaseDate') return p.current_purchase_date ? ageSince(p.current_purchase_date) : null;
+function dateCaption(mode: Product['can_expire'], expiry: string | null, purchase: string | null): string | null {
+  if (mode === 'expiry') return expiry ? expiryAgo(expiry) : null;
+  if (mode === 'purchaseDate') return purchase ? ageSince(purchase) : null;
   return null;
 }
 
-/** Urgency of the current package's expiry, for colouring the caption. */
+/** Caption for the package **in use** — belongs next to the status buttons on
+ * the detail page, which act on exactly that package. */
+export function stockCaption(p: Pick<Product, 'can_expire' | 'current_expiry_date' | 'current_purchase_date'>): string | null {
+  return dateCaption(p.can_expire, p.current_expiry_date, p.current_purchase_date);
+}
+
+/** Caption for the **most urgent** package — belongs in the inventory list, so a
+ * refill about to expire cannot hide behind a longer-dated open package. */
+export function urgentCaption(p: Pick<Product, 'can_expire' | 'urgent_expiry_date' | 'urgent_purchase_date'>): string | null {
+  return dateCaption(p.can_expire, p.urgent_expiry_date, p.urgent_purchase_date);
+}
+
+/** Urgency colour for the inventory caption — follows the most urgent package. */
 export function captionTone(
-  p: Pick<Product, 'can_expire' | 'current_expiry_date'>,
+  p: Pick<Product, 'can_expire' | 'urgent_expiry_date'>,
 ): 'normal' | 'warn' | 'danger' {
-  if (p.can_expire === 'expiry' && p.current_expiry_date) {
-    const days = daysBetween(new Date().toISOString(), new Date(p.current_expiry_date));
+  if (p.can_expire === 'expiry' && p.urgent_expiry_date) {
+    const days = daysBetween(new Date().toISOString(), new Date(p.urgent_expiry_date));
     if (days < 0) return 'danger';
     if (days <= 2) return 'warn';
   }
@@ -104,18 +115,24 @@ function dateCmp(a: string | null, b: string | null): number {
   return a < b ? -1 : 1;
 }
 
-/** Oldest/most-urgent package first — the "current" one. */
-export function sortStock(p: Pick<Product, 'can_expire'>, stock: StockItem[]): StockItem[] {
-  const copy = [...stock];
+/** Most-urgent-first ordering within the refill queue. */
+function urgencyCmp(p: Pick<Product, 'can_expire'>, a: StockItem, b: StockItem): number {
   if (p.can_expire === 'expiry') {
-    return copy.sort((a, b) => dateCmp(a.expiry_date, b.expiry_date) || dateCmp(a.created_at, b.created_at));
+    return dateCmp(a.expiry_date, b.expiry_date) || dateCmp(a.created_at, b.created_at);
   }
   if (p.can_expire === 'purchaseDate') {
-    return copy.sort(
-      (a, b) => dateCmp(a.purchase_date, b.purchase_date) || dateCmp(a.created_at, b.created_at),
-    );
+    return dateCmp(a.purchase_date, b.purchase_date) || dateCmp(a.created_at, b.created_at);
   }
-  return copy.sort((a, b) => dateCmp(a.created_at, b.created_at));
+  return dateCmp(a.created_at, b.created_at);
+}
+
+/** The package in use first, then the refill queue most-urgent-first — mirrors
+ * `shopping_logic.sort_stock`. A package added later never displaces the open
+ * one, even when it expires sooner; products with no designation yet (legacy
+ * rows) fall back to pure most-urgent-first. */
+export function sortStock(p: Pick<Product, 'can_expire'>, stock: StockItem[]): StockItem[] {
+  const inUse = (s: StockItem) => (s.current_since == null ? 1 : 0);
+  return [...stock].sort((a, b) => inUse(a) - inUse(b) || urgencyCmp(p, a, b));
 }
 
 /** Recompute the derived fields from `stock` (e.g. after an optimistic edit). */
@@ -123,6 +140,12 @@ export function deriveProduct(p: Product): Product {
   const stock = sortStock(p, p.stock ?? []);
   const isStatus = p.package_size <= 1;
   const current = stock[0] ?? null;
+  // Not necessarily the current one: the open package keeps its role even when
+  // a refill expires sooner (mirrors `shopping_logic.most_urgent`).
+  const urgent = stock.reduce<StockItem | null>(
+    (best, s) => (best === null || urgencyCmp(p, s, best) < 0 ? s : best),
+    null,
+  );
   const total_units = isStatus ? stock.length : stock.reduce((sum, s) => sum + (s.remaining ?? 0), 0);
   const current_level = isStatus ? (current?.status_level ?? 0) : null;
   const refill_count = isStatus ? Math.max(0, stock.length - 1) : null;
@@ -150,6 +173,8 @@ export function deriveProduct(p: Product): Product {
     refill_count,
     current_expiry_date: current?.expiry_date ?? null,
     current_purchase_date: current?.purchase_date ?? null,
+    urgent_expiry_date: urgent?.expiry_date ?? null,
+    urgent_purchase_date: urgent?.purchase_date ?? null,
     is_low,
   };
 }

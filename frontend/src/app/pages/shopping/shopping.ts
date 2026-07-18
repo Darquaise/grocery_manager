@@ -1,4 +1,4 @@
-import { Component, OnDestroy, inject, signal } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { TranslatePipe } from '@ngx-translate/core';
@@ -6,8 +6,9 @@ import { TranslatePipe } from '@ngx-translate/core';
 import { PlanEntry, Product, ShoppingItem } from '../../models';
 import { ShoppingService } from '../../services/shopping';
 import { ProductsService } from '../../services/products';
+import { KitchensService } from '../../services/kitchens';
 import { UsersService } from '../../services/users';
-import { ConnectivityService } from '../../services/connectivity';
+import { LiveService } from '../../services/live';
 import { SyncService } from '../../services/sync';
 
 interface PlanRow {
@@ -23,6 +24,7 @@ interface PlanRow {
       <h1 class="text-largetitle font-bold">{{ 'shopping.title' | translate }}</h1>
     </header>
 
+    @if (kitchens.canWrite()) {
     <form (ngSubmit)="add()" class="flex flex-wrap gap-2 px-4 pb-3">
       <input
         name="name"
@@ -43,6 +45,7 @@ interface PlanRow {
         }
       </datalist>
     </form>
+    }
 
     @if (shopping.items().length === 0) {
       <div class="px-8 pt-16 text-center">
@@ -55,7 +58,8 @@ interface PlanRow {
           <li class="flex items-center gap-3 px-4 py-2.5">
             <button
               (click)="toggle(item)"
-              class="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full border-2 transition-colors"
+              [disabled]="!kitchens.canWrite()"
+              class="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full border-2 transition-colors disabled:opacity-60"
               [class.border-tint]="item.state === 'inCart'"
               [class.bg-tint]="item.state === 'inCart'"
               [class.border-label-3]="item.state !== 'inCart'"
@@ -87,17 +91,19 @@ interface PlanRow {
               }
             </span>
 
-            <button (click)="remove(item)" class="shrink-0 px-1.5 text-label-3" [attr.aria-label]="'shopping.remove' | translate">
-              <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M6 6l12 12M18 6 6 18" />
-              </svg>
-            </button>
+            @if (kitchens.canWrite()) {
+              <button (click)="remove(item)" class="shrink-0 px-1.5 text-label-3" [attr.aria-label]="'shopping.remove' | translate">
+                <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M6 6l12 12M18 6 6 18" />
+                </svg>
+              </button>
+            }
           </li>
         }
       </ul>
     }
 
-    @if (shopping.cartCount() > 0) {
+    @if (shopping.cartCount() > 0 && kitchens.canWrite()) {
       <div class="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-10 mx-auto max-w-xl px-4 pb-2">
         @if (!completing()) {
           <button (click)="completing.set(true)" class="btn btn-primary w-full shadow-lg">
@@ -167,11 +173,12 @@ interface PlanRow {
     }
   `,
 })
-export class Shopping implements OnDestroy {
+export class Shopping {
   protected shopping = inject(ShoppingService);
   protected users = inject(UsersService);
+  protected kitchens = inject(KitchensService);
   private productsSvc = inject(ProductsService);
-  private connectivity = inject(ConnectivityService);
+  private live = inject(LiveService);
   private sync = inject(SyncService);
   private router = inject(Router);
 
@@ -190,25 +197,22 @@ export class Shopping implements OnDestroy {
   coSameDate = '';
   coRows: PlanRow[] = [];
 
-  // Shared list: while this screen is open + online, refresh every 5 s so both
-  // shoppers see what the other has already grabbed.
-  private poll = setInterval(() => {
-    if (document.visibilityState === 'visible' && this.connectivity.online()) {
-      void this.shopping.load();
-    }
-  }, 5000);
-
   constructor() {
     void this.shopping.load();
     void this.productsSvc.cached().then((p) => p && this.products.set(p));
-    void this.productsSvc
-      .list()
-      .then((p) => this.products.set(p))
-      .catch(() => undefined);
+    void this.reloadProducts();
+
+    // Live: the list itself refreshes globally (ShoppingService); the local
+    // product definitions (autocomplete, check-off dialog) follow here.
+    this.live.onChange(() => void this.reloadProducts());
   }
 
-  ngOnDestroy(): void {
-    clearInterval(this.poll);
+  private async reloadProducts(): Promise<void> {
+    try {
+      this.products.set(await this.productsSvc.list());
+    } catch {
+      // offline — keep cached/current definitions
+    }
   }
 
   /** Has unsynced changes (offline-added temp item or a queued toggle/remove)? */
@@ -226,6 +230,7 @@ export class Shopping implements OnDestroy {
   }
 
   toggle(item: ShoppingItem): void {
+    if (!this.kitchens.canWrite()) return;
     if (item.state === 'inCart') {
       void this.shopping.setState(item, 'open');
       return;

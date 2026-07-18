@@ -5,6 +5,7 @@ import { Trip } from '../../models';
 import { ShoppingService } from '../../services/shopping';
 import { UsersService } from '../../services/users';
 import { LanguageService } from '../../services/language';
+import { LiveService } from '../../services/live';
 
 const DATE_LOCALES: Record<string, string> = { en: 'en-GB', de: 'de-DE' };
 
@@ -65,6 +66,7 @@ export class Archive {
   private shopping = inject(ShoppingService);
   protected users = inject(UsersService);
   private lang = inject(LanguageService);
+  private live = inject(LiveService);
 
   readonly trips = signal<Trip[]>([]);
   readonly loading = signal(true);
@@ -72,12 +74,16 @@ export class Archive {
 
   constructor() {
     void this.load();
-    if (this.users.users().length === 0) void this.users.load();
+    if (this.users.members().length === 0) void this.users.load();
+    // Live: a trip completed on another device shows up right away.
+    this.live.onChange(() => void this.load());
   }
 
   private async load(): Promise<void> {
     try {
       this.trips.set(await this.shopping.listTrips());
+    } catch {
+      // offline — keep what is shown
     } finally {
       this.loading.set(false);
     }
@@ -94,7 +100,7 @@ export class Archive {
   }
 
   userName(id: number): string {
-    return this.users.users().find((u) => u.id === id)?.name ?? '';
+    return this.users.nameOf(id);
   }
 
   formatDate(iso: string | null): string {

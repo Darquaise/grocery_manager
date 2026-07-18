@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, effect, inject, signal, untracked } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
@@ -14,10 +14,19 @@ import {
 } from '../../models';
 import { ProductsService } from '../../services/products';
 import { CategoriesService } from '../../services/categories';
+import { KitchensService } from '../../services/kitchens';
 import { LocationsService } from '../../services/locations';
 import { ConnectivityService } from '../../services/connectivity';
+import { LiveService } from '../../services/live';
 import { SyncService } from '../../services/sync';
-import { deriveProduct, statusLabel, stockCaption, stockItemCaption } from '../../util/format';
+import {
+  deriveProduct,
+  formatDate,
+  sortStock,
+  statusLabel,
+  stockCaption,
+  stockItemCaption,
+} from '../../util/format';
 
 interface FormModel {
   name: string;
@@ -62,6 +71,7 @@ interface FormModel {
                 @for (lvl of [0, 1, 2, 3, 4]; track lvl) {
                   <button
                     (click)="setLevel(lvl)"
+                    [disabled]="!kitchens.canWrite()"
                     class="flex-1 rounded-[8px] px-1 py-2 text-[11px] font-semibold leading-tight transition-colors"
                     [style.backgroundColor]="p.current_level === lvl ? levelColor(lvl) : 'transparent'"
                     [style.color]="p.current_level === lvl ? '#fff' : 'var(--c-label-2)'"
@@ -73,6 +83,11 @@ interface FormModel {
               @if (caption(p); as cap) {
                 <p class="mt-2 text-center text-[13px] text-label-2">{{ cap }}</p>
               }
+              @if (refillHint(p); as hint) {
+                <p class="mt-1 text-center text-[12px]" [style.color]="'var(--c-warn)'">
+                  {{ 'productDetail.refillExpiresSooner' | translate: { date: hint } }}
+                </p>
+              }
             }
 
             <!-- refill stock -->
@@ -81,7 +96,7 @@ interface FormModel {
               <div class="flex items-center gap-3">
                 <button
                   (click)="removeRefill()"
-                  [disabled]="(p.refill_count ?? 0) === 0"
+                  [disabled]="(p.refill_count ?? 0) === 0 || !kitchens.canWrite()"
                   class="flex h-9 w-9 items-center justify-center rounded-full bg-fill text-label active:bg-surface-press disabled:opacity-30"
                   [attr.aria-label]="'productDetail.removeRefill' | translate"
                 >
@@ -94,7 +109,8 @@ interface FormModel {
                 </span>
                 <button
                   (click)="addPackage()"
-                  class="flex h-9 w-9 items-center justify-center rounded-full bg-fill text-label active:bg-surface-press"
+                  [disabled]="!kitchens.canWrite()"
+                  class="flex h-9 w-9 items-center justify-center rounded-full bg-fill text-label active:bg-surface-press disabled:opacity-30"
                   [attr.aria-label]="'productDetail.addPackageAria' | translate"
                 >
                   <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
@@ -113,7 +129,7 @@ interface FormModel {
             <ul class="space-y-2">
               @for (s of p.stock; track s.id; let first = $first) {
                 <li class="flex items-center gap-3 rounded-[12px] bg-fill px-3 py-2">
-                  @if (first) {
+                  @if (first && kitchens.canWrite()) {
                     <button (click)="changeRemaining(-1)" class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface text-label active:bg-surface-press" [attr.aria-label]="'productDetail.oneLess' | translate">
                       <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24"><path stroke-linecap="round" d="M5 12h14" /></svg>
                     </button>
@@ -125,7 +141,7 @@ interface FormModel {
                       <span class="block text-[12px] text-label-2">{{ cap }}</span>
                     }
                   </div>
-                  @if (first) {
+                  @if (first && kitchens.canWrite()) {
                     <button (click)="changeRemaining(1)" class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface text-label active:bg-surface-press" [attr.aria-label]="'productDetail.oneMore' | translate">
                       <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24"><path stroke-linecap="round" d="M12 5v14M5 12h14" /></svg>
                     </button>
@@ -139,10 +155,12 @@ interface FormModel {
               }
             </ul>
 
-            <button (click)="addPackage()" class="btn btn-secondary mt-3 w-full">
-              <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" d="M12 5v14M5 12h14" /></svg>
-              {{ 'productDetail.package' | translate }}
-            </button>
+            @if (kitchens.canWrite()) {
+              <button (click)="addPackage()" class="btn btn-secondary mt-3 w-full">
+                <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" d="M12 5v14M5 12h14" /></svg>
+                {{ 'productDetail.package' | translate }}
+              </button>
+            }
           }
         </div>
       </section>
@@ -165,7 +183,7 @@ interface FormModel {
       }
 
       @if (isNew() || settingsOpen()) {
-        <div class="space-y-4">
+        <fieldset [disabled]="!kitchens.canWrite()" class="space-y-4">
           <label class="block">
             <span class="mb-1.5 block px-1 text-[13px] font-medium text-label-2">{{ 'productDetail.name' | translate }}</span>
             <input [(ngModel)]="form.name" class="field" />
@@ -245,14 +263,16 @@ interface FormModel {
             <p class="px-1 text-[15px] text-danger">{{ error() }}</p>
           }
 
-          <button (click)="save()" [disabled]="saving()" class="btn btn-primary w-full">
-            {{ (isNew() ? 'productDetail.create' : 'productDetail.save') | translate }}
-          </button>
+          @if (kitchens.canWrite()) {
+            <button (click)="save()" [disabled]="saving()" class="btn btn-primary w-full">
+              {{ (isNew() ? 'productDetail.create' : 'productDetail.save') | translate }}
+            </button>
 
-          @if (!isNew()) {
-            <button (click)="remove()" class="btn btn-danger w-full">{{ 'productDetail.delete' | translate }}</button>
+            @if (!isNew()) {
+              <button (click)="remove()" class="btn btn-danger w-full">{{ 'productDetail.delete' | translate }}</button>
+            }
           }
-        </div>
+        </fieldset>
       }
     </section>
 
@@ -294,8 +314,10 @@ export class ProductDetail {
   private router = inject(Router);
   private products = inject(ProductsService);
   private categoriesSvc = inject(CategoriesService);
+  protected kitchens = inject(KitchensService);
   private locationsSvc = inject(LocationsService);
   private connectivity = inject(ConnectivityService);
+  private live = inject(LiveService);
   private sync = inject(SyncService);
   private translate = inject(TranslateService);
 
@@ -332,6 +354,18 @@ export class ProductDetail {
     return this.form.package_size <= 1;
   }
 
+  /** Date of a refill that expires before the open package, else null. The
+   * status buttons only ever act on the open one, so this would otherwise stay
+   * invisible until that package is used up. */
+  refillHint(p: Product): string | null {
+    if (p.can_expire !== 'expiry') return null;
+    const urgent = p.urgent_expiry_date;
+    const current = p.current_expiry_date;
+    // ISO dates compare lexicographically.
+    if (!urgent || !current || urgent >= current) return null;
+    return formatDate(urgent);
+  }
+
   /** Colour for a chosen status level (mirrors the stock-meter gauge). */
   levelColor(lvl: number): string {
     if (lvl >= 3) return 'var(--c-good)';
@@ -351,6 +385,32 @@ export class ProductDetail {
       this.isNew.set(false);
       void this.loadProduct();
     }
+
+    // After each flushed stock sync the product cache holds the server truth —
+    // adopt it so optimistic temp package ids get replaced by real ones.
+    effect(() => {
+      if (this.sync.stockSynced() === 0) return;
+      untracked(() => void this.refreshStockFromCache());
+    });
+
+    // Live: someone else changed something — adopt the server truth for the
+    // stock view. The settings form is left alone so editing isn't clobbered.
+    this.live.onChange(() => void this.refreshFromServer());
+  }
+
+  private async refreshFromServer(): Promise<void> {
+    if (this.isNew()) return;
+    try {
+      this.prod.set(deriveProduct(await this.products.get(this.id)));
+    } catch {
+      // offline / gone — keep the current view
+    }
+  }
+
+  private async refreshStockFromCache(): Promise<void> {
+    if (this.isNew()) return;
+    const cached = await this.products.cachedOne(this.id);
+    if (cached) this.prod.set(deriveProduct(cached));
   }
 
   private async loadProduct(): Promise<void> {
@@ -412,13 +472,23 @@ export class ProductDetail {
     void this.sync.flush();
   }
 
+  /** The open package is used up: the most urgent refill takes over. Mirrors
+   * `ensure_current` on the server so the optimistic view (and offline work)
+   * agrees with what the sync will produce. */
+  private promoteNext(p: Product, rest: StockItem[]): StockItem[] {
+    if (rest.length === 0 || rest.some((s) => s.current_since != null)) return rest;
+    const next = sortStock(p, rest)[0];
+    const now = new Date().toISOString();
+    return rest.map((s) => (s.id === next.id ? { ...s, current_since: now } : s));
+  }
+
   setLevel(level: number): void {
     const p = this.prod();
-    if (!p || p.stock.length === 0) return;
+    if (!p || p.stock.length === 0 || !this.kitchens.canWrite()) return;
     const current = p.stock[0];
     const stock =
       level <= 0
-        ? p.stock.slice(1)
+        ? this.promoteNext(p, p.stock.slice(1))
         : p.stock.map((s, i) => (i === 0 ? { ...s, status_level: level } : s));
     this.commit(stock);
     void this.enqueueAdjust(current, 'status_level', level, p);
@@ -426,12 +496,12 @@ export class ProductDetail {
 
   changeRemaining(delta: number): void {
     const p = this.prod();
-    if (!p || p.stock.length === 0) return;
+    if (!p || p.stock.length === 0 || !this.kitchens.canWrite()) return;
     const top = p.stock[0];
     const next = Math.max(0, (top.remaining ?? 0) + delta);
     const stock =
       next <= 0
-        ? p.stock.slice(1)
+        ? this.promoteNext(p, p.stock.slice(1))
         : p.stock.map((s, i) => (i === 0 ? { ...s, remaining: next } : s));
     this.commit(stock);
     void this.enqueueAdjust(top, 'remaining', next, p);
@@ -495,6 +565,9 @@ export class ProductDetail {
       status_level: isStatus ? 4 : null,
       remaining: isStatus ? null : size,
       size: isStatus ? null : size,
+      // Queues up behind whatever is open (mirrors the server); only the very
+      // first package of a product starts out as the one in use.
+      current_since: p.stock.length === 0 ? now : null,
       created_at: now,
       updated_at: now,
     };
@@ -502,6 +575,7 @@ export class ProductDetail {
     await this.sync.enqueue({
       type: 'stock.add',
       payload: {
+        tempId: temp.id,
         productId: this.id,
         expiry_date: temp.expiry_date,
         purchase_date: temp.purchase_date,

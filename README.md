@@ -1,7 +1,13 @@
 # Grocery Manager
 
-Private, mobile-first **PWA** für genau 2 Personen, um Küchen-Verbrauchsmaterialien
-(Lebensmittel/Vorräte) zu verwalten und automatisch eine Einkaufsliste zu erzeugen.
+Private, mobile-first **PWA** für mehrere Haushalte („Küchen"), um Küchen-Verbrauchs-
+materialien (Lebensmittel/Vorräte) zu verwalten und automatisch eine Einkaufsliste zu
+erzeugen. Jede Küche gehört einem Nutzer; weitere Nutzer werden per Namen mit einer
+Rolle (lesen / lesen+schreiben / verwalten) hinzugefügt, der Besitz ist übertragbar.
+Accounts sind invite-only: jeder bestehende Nutzer kann Einmal-Codes für die
+Registrierung erzeugen; Admins können daran ihre Küche hängen. Beitritte laufen
+immer über eine ausstehende Einladung, die die eingeladene Person in der App
+annimmt oder ablehnt; der Besitzer kann seine Küche auch komplett löschen.
 
 - **Produktspezifikation / Konzept:** [`PLAN.md`](./PLAN.md) ← die fachliche Wahrheit.
 - **Backend-Dev-Doku:** [`backend/README.md`](./backend/README.md).
@@ -32,7 +38,20 @@ Private, mobile-first **PWA** für genau 2 Personen, um Küchen-Verbrauchsmateri
 | Auslieferung | **ein Container**: FastAPI liefert API **und** das gebaute Angular (`/app/static`) aus → ein Origin, kein CORS |
 
 Bewusste Architektur-Entscheidungen (Warum) stehen in `PLAN.md` §5. Kurzfassung:
-Resilient-Online statt Voll-Offline, keine Bildspeicherung, 2 fest geseedete Accounts.
+Resilient-Online statt Voll-Offline, keine Bildspeicherung. Die früheren 2 Seed-Accounts
+(`USER1/2_*`) dienen nur noch als Bootstrap; danach läuft alles über Registrierung
+mit Einladungscode.
+
+**Multi-Haushalt (Stand 2026-07-18):** Alle Fachdaten (Produkte, Bestand, Einkaufsliste,
+Trips, Kategorien, Lagerorte) hängen an einer `kitchen`; die API ist entsprechend unter
+`/api/kitchens/{id}/…` gescoped und prüft pro Request die Mitgliederrolle
+(`read`/`write`/`admin`, Owner = immer admin + Transfer). Die Alembic-Migration
+`e7a1c4d82f56` legt Küche 1 an (Owner = Nutzer 1, alle Bestandsnutzer als admin-Mitglieder)
+und hängt alle Altdaten daran; `f3b9d2e61a07` ergänzt `kitcheninvite` (ausstehende
+Einladungen, Beitritt erst nach Annahme) und die Küchen-Anbindung der Registrierungscodes.
+Frontend: Küchen-Umschalter/-Verwaltung in den Einstellungen (inkl. Einladen, Besitz
+übertragen, Löschen), Beitritts-Dialog beim App-Start, Setup-Screen für Accounts ohne
+Küche, Offline-Caches und Outbox sind pro Küche gescoped.
 
 ---
 
@@ -284,25 +303,25 @@ Legende: ✅ umgesetzt · 🟡 teilweise/vorbereitet · ⬜️ offen.
 
 | Anforderung (aus `PLAN.md` + Nacharbeiten)                                         | Status | Detailgrad / Anmerkung                                                                                      |
 |------------------------------------------------------------------------------------|--------|-------------------------------------------------------------------------------------------------------------|
-| Bestandsmodell mit 3 Typen (`status`/`counter`/`amount`)                           | ✅      | Backend + UI, alle Typen inkl. Einheit                                                                      |
-| Mindestmenge / Status-Schwelle pro Produkt                                         | ✅      | `min_value`, Status als Ordinalwert                                                                         |
-| Verbrauchen/Auffüllen im Detail (Schnell-Buttons + exakter Wert)                   | ✅      | inkl. „Voll auffüllen"                                                                                      |
-| Auto-Einkaufsliste + Snooze bis Wiederauffüllen                                    | ✅      | `shopping_logic.py`, `ignored_until_restock`                                                                |
-| Manuelle + freie Einträge (Menge/Notiz, Farbmarkierung)                            | ✅      | Autovervollständigung vorhanden                                                                             |
-| Im Laden abhaken (Optimistic UI + Retry)                                           | ✅      | resilient-online, localStorage-Cache                                                                        |
-| „Voll"-Wert-Logik beim Kauf-Abschluss                                              | ✅      | Status→Voll, optionaler Voll-Wert                                                                           |
-| Übersicht: Kategorie-Gruppierung, Lagerort-Filter, Suche, Knapp-Markierung         | ✅      | —                                                                                                           |
-| Kategorien (Standard + eigene) verwalten                                           | ✅      | CRUD + Drag-Sortierung in Einstellungen                                                                     |
-| **Lagerorte verwalten (wie Kategorien)**                                           | ✅      | **neu:** eigene Entität + CRUD + Sortierung, Produkt-Dropdown                                               |
-| Login (2 Seed-Accounts, Farben)                                                    | ✅      | argon2, httpOnly-Session-Cookie                                                                             |
+| Bestandsmodell mit 3 Typen (`status`/`counter`/`amount`)                           | ✅     | Backend + UI, alle Typen inkl. Einheit                                                                      |
+| Mindestmenge / Status-Schwelle pro Produkt                                         | ✅     | `min_value`, Status als Ordinalwert                                                                         |
+| Verbrauchen/Auffüllen im Detail (Schnell-Buttons + exakter Wert)                   | ✅     | inkl. „Voll auffüllen"                                                                                      |
+| Auto-Einkaufsliste + Snooze bis Wiederauffüllen                                    | ✅     | `shopping_logic.py`, `ignored_until_restock`                                                                |
+| Manuelle + freie Einträge (Menge/Notiz, Farbmarkierung)                            | ✅     | Autovervollständigung vorhanden                                                                             |
+| Im Laden abhaken (Optimistic UI + Retry)                                           | ✅     | resilient-online, localStorage-Cache                                                                        |
+| „Voll"-Wert-Logik beim Kauf-Abschluss                                              | ✅     | Status→Voll, optionaler Voll-Wert                                                                           |
+| Übersicht: Kategorie-Gruppierung, Lagerort-Filter, Suche, Knapp-Markierung         | ✅     | —                                                                                                           |
+| Kategorien (Standard + eigene) verwalten                                           | ✅     | CRUD + Drag-Sortierung in Einstellungen                                                                     |
+| **Lagerorte verwalten (wie Kategorien)**                                           | ✅     | **neu:** eigene Entität + CRUD + Sortierung, Produkt-Dropdown                                               |
+| Login (2 Seed-Accounts, Farben)                                                    | ✅     | argon2, httpOnly-Session-Cookie                                                                             |
 | Wer-hat-was Farbmarkierung                                                         | 🟡     | an Listeneinträgen/Detail; Platzierung pragmatisch                                                          |
-| Einkauf abschließen → Archiv (+ optional Gesamtpreis)                              | ✅      | Trip-Snapshot                                                                                               |
-| Optik hell/clean, folgt iOS Dark/Light                                             | ✅      | Tailwind v4, `color-scheme`                                                                                 |
-| **Einstellungen aufgeräumt** (einklappbar, Drag-Sortierung, Speichern unter Liste) | ✅      | **neu:** wiederverwendbare `editable-list`-Komponente                                                       |
-| **Bottom-Nav** höher/iPhone-Safe-Area, aktiver Bereich erkennbar, Zahnrad-Icon     | ✅      | **neu:** Akzentbalken + Heroicons-Cog                                                                       |
-| **PWA-Update-Check / Reload bei neuer Version**                                    | ✅      | **neu:** `SwUpdate`, Auto-Reload + Re-Check bei App-Fokus                                                   |
-| **Alembic auch lokal** (Schemaänderung ohne DB-Reset)                              | ✅      | **neu:** Dev-Stack fährt `alembic upgrade head`                                                             |
+| Einkauf abschließen → Archiv (+ optional Gesamtpreis)                              | ✅     | Trip-Snapshot                                                                                               |
+| Optik hell/clean, folgt iOS Dark/Light                                             | ✅     | Tailwind v4, `color-scheme`                                                                                 |
+| **Einstellungen aufgeräumt** (einklappbar, Drag-Sortierung, Speichern unter Liste) | ✅     | **neu:** wiederverwendbare `editable-list`-Komponente                                                       |
+| **Bottom-Nav** höher/iPhone-Safe-Area, aktiver Bereich erkennbar, Zahnrad-Icon     | ✅     | **neu:** Akzentbalken + Heroicons-Cog                                                                       |
+| **PWA-Update-Check / Reload bei neuer Version**                                    | ✅     | **neu:** `SwUpdate`, Auto-Reload + Re-Check bei App-Fokus                                                   |
+| **Alembic auch lokal** (Schemaänderung ohne DB-Reset)                              | ✅     | **neu:** Dev-Stack fährt `alembic upgrade head`                                                             |
 | MHD / Haltbarkeit                                                                  | 🟡     | Feld `expiry_date` im Modell, noch ohne UI (Phase 3)                                                        |
 | Web-Push-Benachrichtigungen                                                        | ⬜️     | Phase 3 (VAPID, iOS 16.4+)                                                                                  |
-| Offline: Lesen überall + gepufferte Writes + Konflikt-Dialog                       | ✅      | IndexedDB-Cache, Outbox, 5-s-Polling, authGuard-Fix, 409-Konflikt-Dialog; Browser-Offline manuell zu testen |
+| Offline: Lesen überall + gepufferte Writes + Konflikt-Dialog                       | ✅     | IndexedDB-Cache, Outbox, 5-s-Polling, authGuard-Fix, 409-Konflikt-Dialog; Browser-Offline manuell zu testen |
 | Tests / CI                                                                         | 🟡     | Backend: 27 `pytest` grün; Frontend-Tests + CI offen                                                        |

@@ -1,4 +1,4 @@
-import { Component, computed, effect, inject, signal } from '@angular/core';
+import { Component, computed, effect, inject, signal, untracked } from '@angular/core';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { SwUpdate, VersionReadyEvent } from '@angular/service-worker';
 import { TranslatePipe } from '@ngx-translate/core';
@@ -8,12 +8,15 @@ import { AuthService } from './services/auth';
 import { UsersService } from './services/users';
 import { ShoppingService } from './services/shopping';
 import { ConnectivityService } from './services/connectivity';
+import { LiveService } from './services/live';
 import { SyncService } from './services/sync';
 import { ConflictDialog } from './components/conflict-dialog';
+import { InviteDialog } from './components/invite-dialog';
+import { KitchensService } from './services/kitchens';
 
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, ConflictDialog, TranslatePipe],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, ConflictDialog, InviteDialog, TranslatePipe],
   templateUrl: './app.html',
 })
 export class App {
@@ -23,22 +26,39 @@ export class App {
   protected connectivity = inject(ConnectivityService);
   protected sync = inject(SyncService);
   private users = inject(UsersService);
+  private kitchens = inject(KitchensService);
   private swUpdate = inject(SwUpdate);
+  // Instantiated for its side effects: the SSE live-update connection.
+  private live = inject(LiveService);
 
   private url = signal(this.router.url);
   protected showNav = computed(() => this.auth.user() !== null && !this.url().startsWith('/login'));
+  /** User id the warm-up effect already ran for (once per login). */
+  private warmedForUser: number | null = null;
 
   constructor() {
     this.router.events
       .pipe(filter((e): e is NavigationEnd => e instanceof NavigationEnd))
       .subscribe((e) => this.url.set(e.urlAfterRedirects));
 
-    // Once logged in, warm the user-colour cache and the cached shopping list.
+    // Once per login, warm the member-colour cache and the cached shopping
+    // list, and check for pending kitchen invitations (join dialog). Tracks
+    // ONLY the user signal and guards via `warmedForUser` — keying off e.g.
+    // "members still empty" would re-trigger on every write to that signal
+    // and (for a kitchen-less account) loop into an endless request storm.
     effect(() => {
-      if (this.auth.user() && this.users.users().length === 0) {
+      const user = this.auth.user();
+      if (!user) {
+        this.warmedForUser = null;
+        return;
+      }
+      if (this.warmedForUser === user.id) return;
+      this.warmedForUser = user.id;
+      untracked(() => {
         void this.users.load();
         void this.shopping.load();
-      }
+        void this.kitchens.loadMyInvites();
+      });
     });
 
     this.watchForUpdates();

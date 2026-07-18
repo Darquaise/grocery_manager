@@ -1,9 +1,10 @@
 import json
 from datetime import UTC, date, datetime
-
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlmodel import Session, select
+
+from .deps import KitchenContext, member_of, writer_of
 
 from ..db import get_session
 from ..models import (
@@ -16,10 +17,9 @@ from ..models import (
     StockItem,
     User,
 )
-from ..shopping_logic import STATUS_FULL, is_status, reconcile_auto_items
-from .deps import current_user
+from ..shopping_logic import STATUS_FULL, ensure_current, is_status, reconcile_auto_items
 
-router = APIRouter(prefix="/shopping", tags=["shopping"], dependencies=[Depends(current_user)])
+router = APIRouter(prefix="/kitchens/{kitchen_id}/shopping", tags=["shopping"])
 
 
 # ── Active list ───────────────────────────────────────────────────────────────
@@ -45,12 +45,23 @@ class ShoppingItemUpdate(BaseModel):
     purchase_plan: list[PlanEntry] | None = None
 
 
+def _get_item(session: Session, ctx: KitchenContext, item_id: int) -> ShoppingListItem:
+    item = session.get(ShoppingListItem, item_id)
+    if not item or item.kitchen_id != ctx.kitchen.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "item not found")
+    return item
+
+
 @router.get("/items", response_model=list[ShoppingListItem])
-def list_items(session: Session = Depends(get_session)):
+def list_items(
+        ctx: KitchenContext = Depends(member_of),
+        session: Session = Depends(get_session),
+):
     """The active list: open + in-cart entries, minus snoozed auto entries."""
     return session.exec(
         select(ShoppingListItem)
         .where(
+            ShoppingListItem.kitchen_id == ctx.kitchen.id,
             ShoppingListItem.state.in_([ShoppingState.open, ShoppingState.in_cart]),
             ShoppingListItem.ignored_until_restock == False,  # noqa: E712
         )
@@ -60,17 +71,20 @@ def list_items(session: Session = Depends(get_session)):
 
 @router.post("/items", response_model=ShoppingListItem, status_code=status.HTTP_201_CREATED)
 def add_item(
-    data: ShoppingItemIn,
-    session: Session = Depends(get_session),
-    user: User = Depends(current_user),
+        data: ShoppingItemIn, ctx: KitchenContext = Depends(writer_of), session: Session = Depends(get_session),
 ):
     """Add a manual item (with optional amount) or a free one-off (no product)."""
+    if data.product_id is not None:
+        product = session.get(Product, data.product_id)
+        if not product or product.kitchen_id != ctx.kitchen.id:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "unknown product_id")
     item = ShoppingListItem(
+        kitchen_id=ctx.kitchen.id,
         display_name=data.display_name,
         amount_text=data.amount_text,
         product_id=data.product_id,
         source=ShoppingSource.manual,
-        added_by=user.id,
+        added_by=ctx.user.id,
     )
     session.add(item)
     session.commit()
@@ -80,15 +94,14 @@ def add_item(
 
 @router.patch("/items/{item_id}", response_model=ShoppingListItem)
 def update_item(
-    item_id: int,
-    data: ShoppingItemUpdate,
-    session: Session = Depends(get_session),
+        item_id: int,
+        data: ShoppingItemUpdate,
+        ctx: KitchenContext = Depends(writer_of),
+        session: Session = Depends(get_session),
 ):
     """Check off / un-check (open <-> inCart), edit the amount text, or record the
     purchase plan (quantity + expiry dates) used when the trip is completed."""
-    item = session.get(ShoppingListItem, item_id)
-    if not item:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "item not found")
+    item = _get_item(session, ctx, item_id)
     fields = data.model_dump(exclude_unset=True)
     if "amount_text" in fields:
         item.amount_text = fields["amount_text"]
@@ -98,7 +111,8 @@ def update_item(
     if fields.get("state") is not None:
         item.state = fields["state"]
         if item.state == ShoppingState.in_cart:
-            _get_or_create_active_trip(session)  # first check-off starts the trip
+            # first check-off starts the trip
+            _get_or_create_active_trip(session, ctx.kitchen.id)
     session.add(item)
     session.commit()
     session.refresh(item)
@@ -107,14 +121,11 @@ def update_item(
 
 @router.delete("/items/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_item(
-    item_id: int,
-    session: Session = Depends(get_session),
+        item_id: int, ctx: KitchenContext = Depends(writer_of), session: Session = Depends(get_session),
 ):
     """Remove an entry. Auto entries are *snoozed* (kept hidden until the product
     is refilled and drops below its threshold again); manual entries are deleted."""
-    item = session.get(ShoppingListItem, item_id)
-    if not item:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "item not found")
+    item = _get_item(session, ctx, item_id)
     if item.source == ShoppingSource.auto:
         item.ignored_until_restock = True
         session.add(item)
@@ -159,19 +170,22 @@ def _trip_out(trip: ShoppingTrip) -> TripOut:
     )
 
 
-def _get_or_create_active_trip(session: Session) -> ShoppingTrip:
+def _get_or_create_active_trip(session: Session, kitchen_id: int) -> ShoppingTrip:
     trip = session.exec(
-        select(ShoppingTrip).where(ShoppingTrip.completed_at.is_(None))
+        select(ShoppingTrip).where(
+            ShoppingTrip.kitchen_id == kitchen_id,
+            ShoppingTrip.completed_at.is_(None),
+        )
     ).first()
     if trip is None:
-        trip = ShoppingTrip(started_at=datetime.now(UTC))
+        trip = ShoppingTrip(kitchen_id=kitchen_id, started_at=datetime.now(UTC))
         session.add(trip)
         session.flush()
     return trip
 
 
 def _materialize_stock(
-    session: Session, product: Product, plan_json: str | None, user: User
+        session: Session, product: Product, plan_json: str | None, user: User
 ) -> None:
     """Turn an item's purchase plan into StockItems. Missing plan = one package."""
     try:
@@ -218,15 +232,16 @@ def _materialize_stock(
 
 @router.post("/complete", response_model=TripOut)
 def complete_trip(
-    data: CompleteTripIn,
-    session: Session = Depends(get_session),
-    user: User = Depends(current_user),
+        data: CompleteTripIn, ctx: KitchenContext = Depends(writer_of), session: Session = Depends(get_session),
 ):
     """Finish the active trip: archive the bought (in-cart) entries, materialise
     their planned packages into stock, and clear them off the active list.
     Unchecked entries stay on the list for next time."""
     bought = session.exec(
-        select(ShoppingListItem).where(ShoppingListItem.state == ShoppingState.in_cart)
+        select(ShoppingListItem).where(
+            ShoppingListItem.kitchen_id == ctx.kitchen.id,
+            ShoppingListItem.state == ShoppingState.in_cart,
+        )
     ).all()
     if not bought:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "nothing in the cart")
@@ -245,39 +260,44 @@ def complete_trip(
         if item.product_id is not None:
             product = session.get(Product, item.product_id)
             if product and product.deleted_at is None:
-                _materialize_stock(session, product, item.purchase_plan, user)
+                # Pin the package in use first: bought packages queue up behind
+                # it, they never replace what is currently open.
+                ensure_current(session, product)
+                _materialize_stock(session, product, item.purchase_plan, ctx.user)
+                session.flush()
+                ensure_current(session, product)  # first stock ever -> designate it
         session.delete(item)
 
-    trip = _get_or_create_active_trip(session)
+    trip = _get_or_create_active_trip(session, ctx.kitchen.id)
     trip.items_json = json.dumps(snapshot, ensure_ascii=False)
     trip.completed_at = datetime.now(UTC)
-    trip.completed_by = user.id
+    trip.completed_by = ctx.user.id
     trip.total_price = data.total_price
     session.add(trip)
 
     session.flush()
-    reconcile_auto_items(session)  # refilled products drop off the auto list
+    reconcile_auto_items(session, ctx.kitchen.id)  # refilled products drop off the auto list
     session.commit()
     session.refresh(trip)
     return _trip_out(trip)
 
 
 @router.get("/trips", response_model=list[TripOut])
-def list_trips(session: Session = Depends(get_session)):
+def list_trips(ctx: KitchenContext = Depends(member_of), session: Session = Depends(get_session)):
     trips = session.exec(
         select(ShoppingTrip)
-        .where(ShoppingTrip.completed_at.is_not(None))
+        .where(
+            ShoppingTrip.kitchen_id == ctx.kitchen.id,
+            ShoppingTrip.completed_at.is_not(None),
+        )
         .order_by(ShoppingTrip.completed_at.desc())
     ).all()
     return [_trip_out(t) for t in trips]
 
 
 @router.get("/trips/{trip_id}", response_model=TripOut)
-def get_trip(
-    trip_id: int,
-    session: Session = Depends(get_session),
-):
+def get_trip(trip_id: int, ctx: KitchenContext = Depends(member_of), session: Session = Depends(get_session)):
     trip = session.get(ShoppingTrip, trip_id)
-    if not trip or trip.completed_at is None:
+    if not trip or trip.kitchen_id != ctx.kitchen.id or trip.completed_at is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "trip not found")
     return _trip_out(trip)

@@ -1,6 +1,7 @@
 """Test harness: a fresh in-memory SQLite DB per test, two seeded accounts, and
-a logged-in client. The app's engine is swapped for a single shared-connection
-SQLite engine (StaticPool) so the TestClient's worker threads see one DB."""
+a logged-in client with its own kitchen. The app's engine is swapped for a
+single shared-connection SQLite engine (StaticPool) so the TestClient's worker
+threads see one DB."""
 
 import os
 
@@ -24,6 +25,7 @@ from sqlmodel import Session, SQLModel, create_engine  # noqa: E402
 import app.db  # noqa: E402
 import app.main  # noqa: E402
 from app.seed import seed  # noqa: E402
+from tests.util import create_kitchen, login  # noqa: E402
 
 _test_engine = create_engine(
     "sqlite://",
@@ -49,9 +51,12 @@ def client():
 
 @pytest.fixture()
 def auth_client(client):
-    """`client`, logged in as alice (user 1)."""
-    resp = client.post("/api/login", json={"name": "alice", "password": "pw-alice"})
-    assert resp.status_code == 200, resp.text
+    """`client`, logged in as alice (user 1), owning a fresh kitchen. The
+    kitchen-scoped API prefix is exposed as `client.k`."""
+    login(client, "alice", "pw-alice")
+    kitchen = create_kitchen(client)
+    client.kitchen_id = kitchen["id"]
+    client.k = f"/api/kitchens/{kitchen['id']}"
     return client
 
 
@@ -62,7 +67,7 @@ def make_product(auth_client):
     def _make(**overrides):
         body = {"name": "Test", "package_size": 1, "can_expire": "none"}
         body.update(overrides)
-        resp = auth_client.post("/api/products", json=body)
+        resp = auth_client.post(f"{auth_client.k}/products", json=body)
         assert resp.status_code == 201, resp.text
         return resp.json()
 
@@ -74,9 +79,8 @@ def add_stock(auth_client):
     """Factory: add one stock package to a product and return the product JSON."""
 
     def _add(product_id, **kw):
-        resp = auth_client.post(f"/api/products/{product_id}/stock", json=kw)
+        resp = auth_client.post(f"{auth_client.k}/products/{product_id}/stock", json=kw)
         assert resp.status_code == 201, resp.text
         return resp.json()
 
     return _add
-

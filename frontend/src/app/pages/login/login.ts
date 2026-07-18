@@ -1,6 +1,7 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
+import { HttpErrorResponse } from '@angular/common/http';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 
 import { AuthService } from '../../services/auth';
@@ -36,14 +37,30 @@ import { LanguageSelector } from '../../components/language-selector';
           type="password"
           [(ngModel)]="password"
           [placeholder]="'login.password' | translate"
-          autocomplete="current-password"
+          [autocomplete]="registering() ? 'new-password' : 'current-password'"
           class="field"
         />
+        @if (registering()) {
+          <input
+            name="inviteCode"
+            [(ngModel)]="inviteCode"
+            [placeholder]="'login.inviteCode' | translate"
+            autocomplete="off"
+            class="field"
+          />
+        }
         @if (error) {
           <p class="text-center text-[15px] text-danger">{{ error }}</p>
         }
         <button type="submit" [disabled]="loading" class="btn btn-primary w-full">
-          {{ 'login.signIn' | translate }}
+          {{ (registering() ? 'login.register' : 'login.signIn') | translate }}
+        </button>
+        <button
+          type="button"
+          (click)="toggleMode()"
+          class="w-full py-1 text-center text-[15px] text-tint"
+        >
+          {{ (registering() ? 'login.haveAccount' : 'login.noAccount') | translate }}
         </button>
       </form>
     </div>
@@ -56,19 +73,37 @@ export class Login {
 
   name = '';
   password = '';
+  inviteCode = '';
   error = '';
   loading = false;
+  readonly registering = signal(false);
+
+  toggleMode(): void {
+    this.registering.set(!this.registering());
+    this.error = '';
+  }
 
   async submit(): Promise<void> {
     this.loading = true;
     this.error = '';
     try {
-      await this.auth.login(this.name, this.password);
+      if (this.registering()) {
+        await this.auth.register(this.name.trim(), this.password, this.inviteCode.trim());
+      } else {
+        await this.auth.login(this.name, this.password);
+      }
       await this.router.navigateByUrl('/');
-    } catch {
-      this.error = this.translate.instant('login.failed');
+    } catch (err) {
+      this.error = this.translate.instant(this.errorKey(err));
     } finally {
       this.loading = false;
     }
+  }
+
+  private errorKey(err: unknown): string {
+    if (!this.registering()) return 'login.failed';
+    if (err instanceof HttpErrorResponse && err.status === 403) return 'login.badInvite';
+    if (err instanceof HttpErrorResponse && err.status === 409) return 'login.nameTaken';
+    return 'login.registerFailed';
   }
 }

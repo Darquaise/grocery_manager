@@ -6,14 +6,24 @@ import { TranslatePipe } from '@ngx-translate/core';
 import { User } from '../../models';
 import { AuthService } from '../../services/auth';
 import { CategoriesService } from '../../services/categories';
+import { KitchensService } from '../../services/kitchens';
 import { LocationsService } from '../../services/locations';
 import { UsersService } from '../../services/users';
+import { AccountInvites } from '../../components/account-invites';
 import { EditableListComponent } from '../../components/editable-list';
+import { KitchenManager } from '../../components/kitchen-manager';
 import { LanguageSelector } from '../../components/language-selector';
 
 @Component({
   selector: 'app-settings',
-  imports: [FormsModule, TranslatePipe, EditableListComponent, LanguageSelector],
+  imports: [
+    FormsModule,
+    TranslatePipe,
+    AccountInvites,
+    EditableListComponent,
+    KitchenManager,
+    LanguageSelector,
+  ],
   template: `
     <header class="px-4 pb-2 pt-3">
       <h1 class="text-largetitle font-bold">{{ 'settings.title' | translate }}</h1>
@@ -22,29 +32,33 @@ import { LanguageSelector } from '../../components/language-selector';
     <div class="space-y-5 px-4 pb-4">
       <app-language-selector variant="row" [persist]="true" />
 
+      <app-kitchen-manager />
+
       <app-editable-list
         [title]="'settings.categories' | translate"
         [store]="categoriesSvc"
         [addPlaceholder]="'settings.newCategory' | translate"
+        [canEdit]="kitchens.canWrite()"
       />
       <app-editable-list
         [title]="'settings.locations' | translate"
         [store]="locationsSvc"
         [addPlaceholder]="'settings.newLocation' | translate"
+        [canEdit]="kitchens.canWrite()"
       />
 
-      <!-- User colours -->
+      <!-- Member colours (own colour editable) -->
       <section class="ios-card p-4">
         <h2 class="pb-3 text-[13px] font-semibold text-label-2">{{ 'settings.usersColors' | translate }}</h2>
         <ul class="space-y-3">
-          @for (u of users.users(); track u.id) {
+          @for (m of users.members(); track m.user_id) {
             <li class="flex items-center gap-3">
-              <span class="h-4 w-4 shrink-0 rounded-full" [style.background-color]="u.color"></span>
-              <span class="flex-1 text-[17px]">{{ u.name }}</span>
-              @if (u.id === auth.user()?.id) {
+              <span class="h-4 w-4 shrink-0 rounded-full" [style.background-color]="m.color"></span>
+              <span class="flex-1 text-[17px]">{{ m.name }}</span>
+              @if (m.user_id === auth.user()?.id) {
                 <input
                   type="color"
-                  [ngModel]="u.color"
+                  [ngModel]="m.color"
                   (ngModelChange)="changeColor($event)"
                   class="h-8 w-12 rounded-lg bg-transparent"
                 />
@@ -53,6 +67,8 @@ import { LanguageSelector } from '../../components/language-selector';
           }
         </ul>
       </section>
+
+      <app-account-invites />
 
       <!-- Logout -->
       <button
@@ -67,12 +83,13 @@ import { LanguageSelector } from '../../components/language-selector';
 export class Settings {
   protected auth = inject(AuthService);
   protected users = inject(UsersService);
+  protected kitchens = inject(KitchensService);
   protected categoriesSvc = inject(CategoriesService);
   protected locationsSvc = inject(LocationsService);
   private router = inject(Router);
 
   constructor() {
-    if (this.users.users().length === 0) void this.users.load();
+    if (this.users.members().length === 0) void this.users.load();
   }
 
   async changeColor(color: string): Promise<void> {

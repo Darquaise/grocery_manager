@@ -12,7 +12,7 @@ the product is refilled above its threshold and drops below again.
 """
 
 from collections import defaultdict
-from datetime import UTC, date
+from datetime import UTC, date, datetime
 
 from sqlmodel import Session, select
 
@@ -41,19 +41,59 @@ def _created_ts(item: StockItem) -> float:
     return (dt if dt.tzinfo else dt.replace(tzinfo=UTC)).timestamp()
 
 
-def sort_stock(product: Product, stock: list[StockItem]) -> list[StockItem]:
-    """Oldest/most-urgent package first — the "current" one. Sorted by expiry
-    (expiry mode), purchase date (purchaseDate mode) or creation order."""
+def _urgency_key(product: Product, item: StockItem):
+    """Most-urgent-first ordering: by expiry (expiry mode), purchase date
+    (purchaseDate mode) or creation order."""
     if product.can_expire == ExpiryMode.expiry:
-        return sorted(
-            stock, key=lambda s: (s.expiry_date is None, s.expiry_date or date.max, _created_ts(s))
-        )
+        return (item.expiry_date is None, item.expiry_date or date.max, _created_ts(item))
     if product.can_expire == ExpiryMode.purchase_date:
-        return sorted(
-            stock,
-            key=lambda s: (s.purchase_date is None, s.purchase_date or date.max, _created_ts(s)),
-        )
-    return sorted(stock, key=_created_ts)
+        return (item.purchase_date is None, item.purchase_date or date.max, _created_ts(item))
+    return (False, date.min, _created_ts(item))
+
+
+def sort_stock(product: Product, stock: list[StockItem]) -> list[StockItem]:
+    """The package in use first, then the refill queue most-urgent-first.
+
+    A newly added package never displaces the one in use (`current_since`), even
+    if it expires sooner — you finish the open package first. Products with no
+    designation yet (legacy rows) fall back to pure most-urgent-first.
+    """
+    return sorted(stock, key=lambda s: (s.current_since is None, _urgency_key(product, s)))
+
+
+def most_urgent(product: Product, stock: list[StockItem]) -> StockItem | None:
+    """The package that expires/ages first — regardless of which one is in use.
+
+    The package in use keeps its role until it is used up, so it is not
+    necessarily the most urgent one. The inventory list warns off *this*
+    package, so a refill about to expire cannot hide behind an open one.
+    """
+    return min(stock, key=lambda s: _urgency_key(product, s)) if stock else None
+
+
+def ensure_current(session: Session, product: Product) -> None:
+    """Keep the "exactly one package in use" invariant.
+
+    An existing designation is left alone — that package stays current until it
+    is used up, so a package added later never takes its place. Only when none
+    is designated (a fresh product, the current one just emptied, or a legacy
+    row) does the most-urgent package take over.
+    """
+    stock = session.exec(select(StockItem).where(StockItem.product_id == product.id)).all()
+    if not stock:
+        return
+    marked = [s for s in stock if s.current_since is not None]
+    if len(marked) == 1:
+        return
+    # None designated -> the most urgent takes over; several (should not happen)
+    # -> the longest-standing one keeps it.
+    keep = min(marked, key=lambda s: s.current_since) if marked else sort_stock(product, stock)[0]
+    now = datetime.now(UTC)
+    for item in stock:
+        want = now if item is keep else None
+        if (item.current_since is None) != (want is None):
+            item.current_since = want
+            session.add(item)
 
 
 def total_units(product: Product, stock: list[StockItem]) -> int:
@@ -86,8 +126,8 @@ def is_below_threshold(product: Product, stock: list[StockItem]) -> bool:
     return total_units(product, ordered) <= product.reorder_total_units
 
 
-def reconcile_auto_items(session: Session) -> None:
-    """Sync the `auto` shopping entries with current product stock levels.
+def reconcile_auto_items(session: Session, kitchen_id: int) -> None:
+    """Sync one kitchen's `auto` shopping entries with its product stock levels.
 
     For each non-deleted product at/below its threshold: ensure one *open* auto
     entry exists (unless one already does — which keeps a snooze intact while the
@@ -101,6 +141,7 @@ def reconcile_auto_items(session: Session) -> None:
         item.product_id: item
         for item in session.exec(
             select(ShoppingListItem).where(
+                ShoppingListItem.kitchen_id == kitchen_id,
                 ShoppingListItem.source == ShoppingSource.auto,
                 ShoppingListItem.state == ShoppingState.open,
             )
@@ -108,17 +149,24 @@ def reconcile_auto_items(session: Session) -> None:
         if item.product_id is not None
     }
 
-    stock_by_product: dict[int, list[StockItem]] = defaultdict(list)
-    for item in session.exec(select(StockItem)).all():
-        stock_by_product[item.product_id].append(item)
+    products = session.exec(select(Product).where(Product.kitchen_id == kitchen_id)).all()
 
-    for product in session.exec(select(Product)).all():
+    stock_by_product: dict[int, list[StockItem]] = defaultdict(list)
+    product_ids = [p.id for p in products]
+    if product_ids:
+        for item in session.exec(
+                select(StockItem).where(StockItem.product_id.in_(product_ids))
+        ).all():
+            stock_by_product[item.product_id].append(item)
+
+    for product in products:
         existing = open_auto.get(product.id)
         stock = stock_by_product.get(product.id, [])
         if product.deleted_at is None and is_below_threshold(product, stock):
             if existing is None:
                 session.add(
                     ShoppingListItem(
+                        kitchen_id=kitchen_id,
                         product_id=product.id,
                         display_name=product.name,
                         source=ShoppingSource.auto,

@@ -2,7 +2,7 @@
 
 
 def items(c):
-    return c.get("/api/shopping/items").json()
+    return c.get(f"{c.k}/shopping/items").json()
 
 
 def names(c):
@@ -23,14 +23,14 @@ def test_status_threshold_level_and_refill(auth_client, make_product, add_stock)
     assert names(auth_client) == []
 
     # ein Nachfüllpaket weg -> refill 1 <= 1, aber aktueller voll(4) > 2 -> nicht
-    out = auth_client.get(f"/api/products/{pid}").json()
-    auth_client.delete(f"/api/products/{pid}/stock/{out['stock'][-1]['id']}")
+    out = auth_client.get(f"{auth_client.k}/products/{pid}").json()
+    auth_client.delete(f"{auth_client.k}/products/{pid}/stock/{out['stock'][-1]['id']}")
     assert names(auth_client) == []
 
     # aktuelles auf Mittel(2): 2<=2 UND refill 1<=1 -> auf die Liste
-    out = auth_client.get(f"/api/products/{pid}").json()
+    out = auth_client.get(f"{auth_client.k}/products/{pid}").json()
     auth_client.patch(
-        f"/api/products/{pid}/stock/{out['stock'][0]['id']}", json={"status_level": 2}
+        f"{auth_client.k}/products/{pid}/stock/{out['stock'][0]['id']}", json={"status_level": 2}
     )
     assert names(auth_client) == ["Milch"]
 
@@ -43,7 +43,7 @@ def test_status_refill_count_dominates(auth_client, make_product, add_stock):
     )
     pid = p["id"]
     add_stock(pid)  # 1 volles Paket -> aktuell voll, 0 Nachfüll
-    out = auth_client.get(f"/api/products/{pid}").json()
+    out = auth_client.get(f"{auth_client.k}/products/{pid}").json()
     assert out["current_level"] == 4
     assert out["refill_count"] == 0
     assert names(auth_client) == ["Milch"]
@@ -64,9 +64,9 @@ def test_counter_total_units_threshold(auth_client, make_product, add_stock):
     add_stock(pid, size=10, remaining=10)
     assert names(auth_client) == []  # 10 > 4
 
-    out = auth_client.get(f"/api/products/{pid}").json()
+    out = auth_client.get(f"{auth_client.k}/products/{pid}").json()
     auth_client.patch(
-        f"/api/products/{pid}/stock/{out['stock'][0]['id']}", json={"remaining": 4}
+        f"{auth_client.k}/products/{pid}/stock/{out['stock'][0]['id']}", json={"remaining": 4}
     )
     assert names(auth_client) == ["Eier"]  # 4 <= 4
 
@@ -91,7 +91,7 @@ def test_snooze_until_restock(auth_client, make_product, add_stock):
     assert len(auto) == 1
 
     # Auto-Eintrag wegwischen -> snoozed
-    auth_client.delete(f"/api/shopping/items/{auto[0]['id']}")
+    auth_client.delete(f"{auth_client.k}/shopping/items/{auto[0]['id']}")
     assert names(auth_client) == []
 
     # Weiter unter der Schwelle -> darf NICHT zurückkommen
@@ -101,8 +101,8 @@ def test_snooze_until_restock(auth_client, make_product, add_stock):
     add_stock(pid)
     add_stock(pid)
     assert names(auth_client) == []
-    out = auth_client.get(f"/api/products/{pid}").json()
-    auth_client.delete(f"/api/products/{pid}/stock/{out['stock'][-1]['id']}")
+    out = auth_client.get(f"{auth_client.k}/products/{pid}").json()
+    auth_client.delete(f"{auth_client.k}/products/{pid}/stock/{out['stock'][-1]['id']}")
     assert names(auth_client) == ["Butter"]
 
 
@@ -111,14 +111,14 @@ def test_soft_delete_removes_auto_entry(auth_client, make_product):
         name="Joghurt", package_size=1, reorder_status_level=4, reorder_refill_count=0
     )
     assert names(auth_client) == ["Joghurt"]  # leer -> auf der Liste
-    auth_client.delete(f"/api/products/{p['id']}")
+    auth_client.delete(f"{auth_client.k}/products/{p['id']}")
     assert names(auth_client) == []
 
 
 def test_manual_and_free_items(auth_client):
-    auth_client.post("/api/shopping/items", json={"display_name": "Grillkohle"})
+    auth_client.post(f"{auth_client.k}/shopping/items", json={"display_name": "Grillkohle"})
     auth_client.post(
-        "/api/shopping/items", json={"display_name": "Tomaten", "amount_text": "2 kg"}
+        f"{auth_client.k}/shopping/items", json={"display_name": "Tomaten", "amount_text": "2 kg"}
     )
     listing = items(auth_client)
     assert sorted(i["display_name"] for i in listing) == ["Grillkohle", "Tomaten"]

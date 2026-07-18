@@ -1,7 +1,7 @@
 from datetime import UTC, date, datetime
 from enum import Enum
 
-from sqlmodel import Field, SQLModel
+from sqlmodel import Field, SQLModel, UniqueConstraint
 
 
 def _now() -> datetime:
@@ -22,13 +22,29 @@ class ExpiryMode(str, Enum):
 
 
 class ShoppingSource(str, Enum):
-    auto = "auto"          # from a product falling below its reorder threshold
+    auto = "auto"  # from a product falling below its reorder threshold
     manual = "manual"
 
 
 class ShoppingState(str, Enum):
     open = "open"
     in_cart = "inCart"
+
+
+class KitchenRole(str, Enum):
+    """What a member may do in a kitchen (each level includes the previous).
+
+    * `read`  — view inventory, shopping list and archive.
+    * `write` — additionally change any domain data (stock, list, products,
+                categories, locations, complete trips).
+    * `admin` — additionally rename the kitchen and manage members. The owner
+                (`Kitchen.owner_id`) is always treated as an admin and can also
+                transfer ownership.
+    """
+
+    read = "read"
+    write = "write"
+    admin = "admin"
 
 
 class User(SQLModel, table=True):
@@ -42,8 +58,61 @@ class User(SQLModel, table=True):
     created_at: datetime = Field(default_factory=_now)
 
 
+class Kitchen(SQLModel, table=True):
+    """One household. All domain data (products, stock, shopping, categories,
+    locations, trips) belongs to exactly one kitchen."""
+
+    id: int | None = Field(default=None, primary_key=True)
+    name: str
+    owner_id: int = Field(foreign_key="user.id")
+    created_at: datetime = Field(default_factory=_now)
+
+
+class KitchenMember(SQLModel, table=True):
+    """A user's membership in a kitchen (the owner has a row too)."""
+
+    __table_args__ = (UniqueConstraint("kitchen_id", "user_id"),)
+
+    id: int | None = Field(default=None, primary_key=True)
+    kitchen_id: int = Field(foreign_key="kitchen.id", index=True)
+    user_id: int = Field(foreign_key="user.id", index=True)
+    role: KitchenRole = KitchenRole.write
+    created_at: datetime = Field(default_factory=_now)
+
+
+class KitchenInvite(SQLModel, table=True):
+    """A pending invitation of a user into a kitchen. Membership only starts
+    once the invitee accepts (via the join dialog); declining deletes it."""
+
+    __table_args__ = (UniqueConstraint("kitchen_id", "user_id"),)
+
+    id: int | None = Field(default=None, primary_key=True)
+    kitchen_id: int = Field(foreign_key="kitchen.id", index=True)
+    user_id: int = Field(foreign_key="user.id", index=True)
+    role: KitchenRole = KitchenRole.write
+    invited_by: int = Field(foreign_key="user.id")
+    created_at: datetime = Field(default_factory=_now)
+
+
+class AccountInvite(SQLModel, table=True):
+    """Single-use registration code. Any existing user can create one; a new
+    account can only be registered with an unused code. Admins may attach one
+    of their kitchens — registering with such a code creates a pending
+    `KitchenInvite` for the new account."""
+
+    id: int | None = Field(default=None, primary_key=True)
+    code: str = Field(index=True, unique=True)
+    created_by: int = Field(foreign_key="user.id")
+    created_at: datetime = Field(default_factory=_now)
+    used_by: int | None = Field(default=None, foreign_key="user.id")
+    used_at: datetime | None = None
+    kitchen_id: int | None = Field(default=None, foreign_key="kitchen.id")
+    kitchen_role: KitchenRole | None = None
+
+
 class Category(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
+    kitchen_id: int = Field(foreign_key="kitchen.id", index=True)
     name: str = Field(index=True)
     sort_order: int = 0
     is_default: bool = False
@@ -54,6 +123,7 @@ class Location(SQLModel, table=True):
     categories: editable list with a sort order, used to group/filter products."""
 
     id: int | None = Field(default=None, primary_key=True)
+    kitchen_id: int = Field(foreign_key="kitchen.id", index=True)
     name: str = Field(index=True)
     sort_order: int = 0
     is_default: bool = False
@@ -64,6 +134,7 @@ class Product(SQLModel, table=True):
     product can hold several packages with different expiry dates."""
 
     id: int | None = Field(default=None, primary_key=True)
+    kitchen_id: int = Field(foreign_key="kitchen.id", index=True)
     name: str = Field(index=True)
     category_id: int | None = Field(default=None, foreign_key="category.id")
     location_id: int | None = Field(default=None, foreign_key="location.id")
@@ -92,14 +163,25 @@ class Product(SQLModel, table=True):
 
 
 class StockItem(SQLModel, table=True):
-    """One physical package of a product. Sorted oldest-first (by expiry,
-    purchase date, or creation) so the most-urgent package is "current"."""
+    """One physical package of a product.
+
+    Exactly one package per product is the "current" one — the package in use,
+    marked by `current_since`. It keeps that role until it is used up; packages
+    added later queue up behind it even if they expire sooner. The refill queue
+    itself is ordered most-urgent-first (by expiry, purchase date, or creation),
+    so the next package to become current is the one that expires first.
+    """
 
     id: int | None = Field(default=None, primary_key=True)
     product_id: int = Field(foreign_key="product.id", index=True)
 
-    expiry_date: date | None = None       # can_expire == expiry
-    purchase_date: date | None = None     # can_expire == purchaseDate
+    expiry_date: date | None = None  # can_expire == expiry
+    purchase_date: date | None = None  # can_expire == purchaseDate
+
+    # Set on the package currently in use; None on every queued refill. A
+    # product whose packages are all None has not been designated yet and falls
+    # back to pure most-urgent-first ordering.
+    current_since: datetime | None = None
 
     # status products: this package's fill level 0..4 (refills are 4 = full).
     status_level: int | None = None
@@ -114,6 +196,7 @@ class StockItem(SQLModel, table=True):
 
 class ShoppingListItem(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
+    kitchen_id: int = Field(foreign_key="kitchen.id", index=True)
     product_id: int | None = Field(default=None, foreign_key="product.id")
     display_name: str
     amount_text: str | None = None
@@ -130,6 +213,7 @@ class ShoppingListItem(SQLModel, table=True):
 
 class ShoppingTrip(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
+    kitchen_id: int = Field(foreign_key="kitchen.id", index=True)
     started_at: datetime = Field(default_factory=_now)
     completed_at: datetime | None = None
     completed_by: int | None = Field(default=None, foreign_key="user.id")

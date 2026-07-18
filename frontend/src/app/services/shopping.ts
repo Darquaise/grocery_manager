@@ -6,8 +6,7 @@ import { PlanEntry, ShoppingItem, ShoppingState, Trip } from '../models';
 import { OfflineDbService } from './offline-db';
 import { SyncService } from './sync';
 import { AuthService } from './auth';
-
-const CACHE_KEY = 'shopping';
+import { KitchensService } from './kitchens';
 
 @Injectable({ providedIn: 'root' })
 export class ShoppingService {
@@ -15,18 +14,30 @@ export class ShoppingService {
   private db = inject(OfflineDbService);
   private sync = inject(SyncService);
   private auth = inject(AuthService);
+  private kitchens = inject(KitchensService);
 
-  /** The active list (open + in-cart). Cached in IndexedDB for offline reads. */
+  /** The active kitchen's list (open + in-cart). Cached in IndexedDB per kitchen. */
   readonly items = signal<ShoppingItem[]>([]);
   readonly cartCount = computed(() => this.items().filter((i) => i.state === 'inCart').length);
 
   constructor() {
-    void this.hydrate();
+    if (this.kitchens.activeId() != null) void this.hydrate();
+  }
+
+  private cacheKey(): string {
+    return this.kitchens.cacheKey('shopping');
   }
 
   private async hydrate(): Promise<void> {
-    const cached = await this.db.getCache<ShoppingItem[]>(CACHE_KEY);
+    const cached = await this.db.getCache<ShoppingItem[]>(this.cacheKey());
     if (cached && this.items().length === 0) this.items.set(cached.data);
+  }
+
+  /** The active kitchen changed: drop the old list and load the new one. */
+  async switchKitchen(): Promise<void> {
+    this.items.set([]);
+    await this.hydrate();
+    await this.load();
   }
 
   /** Push queued changes first, then pull the server truth. Offline: keep cache. */
@@ -37,7 +48,9 @@ export class ShoppingService {
 
   async reloadFromServer(): Promise<void> {
     try {
-      const items = await firstValueFrom(this.http.get<ShoppingItem[]>('/api/shopping/items'));
+      const items = await firstValueFrom(
+        this.http.get<ShoppingItem[]>(`${this.kitchens.base()}/shopping/items`),
+      );
       this.setItems(items);
     } catch {
       // offline / unreachable — keep whatever is cached
@@ -97,18 +110,20 @@ export class ShoppingService {
   /** Finish the trip → archive. Online-only (offline the button just retries). */
   async complete(totalPrice: number | null): Promise<Trip> {
     const trip = await firstValueFrom(
-      this.http.post<Trip>('/api/shopping/complete', { total_price: totalPrice }),
+      this.http.post<Trip>(`${this.kitchens.base()}/shopping/complete`, {
+        total_price: totalPrice,
+      }),
     );
     await this.reloadFromServer();
     return trip;
   }
 
   listTrips(): Promise<Trip[]> {
-    return firstValueFrom(this.http.get<Trip[]>('/api/shopping/trips'));
+    return firstValueFrom(this.http.get<Trip[]>(`${this.kitchens.base()}/shopping/trips`));
   }
 
   private setItems(items: ShoppingItem[]): void {
     this.items.set(items);
-    void this.db.setCache(CACHE_KEY, items);
+    void this.db.setCache(this.cacheKey(), items);
   }
 }
