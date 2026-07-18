@@ -7,7 +7,7 @@ import {
 import { provideHttpClient, withFetch, withInterceptors } from '@angular/common/http';
 import { provideRouter } from '@angular/router';
 import { provideServiceWorker } from '@angular/service-worker';
-import { provideTranslateService, provideTranslateLoader } from '@ngx-translate/core';
+import { TranslateLoader, provideTranslateService } from '@ngx-translate/core';
 
 import { routes } from './app.routes';
 import { connectivityInterceptor } from './interceptors/connectivity-interceptor';
@@ -20,7 +20,8 @@ export const appConfig: ApplicationConfig = {
     provideZoneChangeDetection({ eventCoalescing: true }),
     provideHttpClient(withFetch(), withInterceptors([connectivityInterceptor])),
     provideTranslateService({
-      loader: provideTranslateLoader(StaticTranslateLoader),
+      // Explicit provider — see the note on StaticTranslateLoader.
+      loader: { provide: TranslateLoader, useClass: StaticTranslateLoader },
       fallbackLang: DEFAULT_LANGUAGE,
       lang: DEFAULT_LANGUAGE,
     }),

@@ -1,3 +1,4 @@
+import { Injectable } from '@angular/core';
 import { TranslateLoader, TranslationObject } from '@ngx-translate/core';
 import { Observable, of } from 'rxjs';
 
@@ -11,6 +12,11 @@ const DICTIONARIES: Record<string, TranslationObject> = {
   de: de as unknown as TranslationObject,
 };
 
+/** `@Injectable` so AOT emits a real factory: ngx-translate's
+ * `provideTranslateLoader` sniffs classes via `/^class\s/` on `toString()`,
+ * which the production minifier breaks (`var x = class{…}`) — the loader is
+ * therefore provided explicitly (app.config.ts), never via that heuristic. */
+@Injectable()
 export class StaticTranslateLoader implements TranslateLoader {
   getTranslation(lang: string): Observable<TranslationObject> {
     return of(DICTIONARIES[lang] ?? {});
