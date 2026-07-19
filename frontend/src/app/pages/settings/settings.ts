@@ -1,6 +1,6 @@
 import { Component, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { TranslatePipe } from '@ngx-translate/core';
 
 import { User } from '../../models';
@@ -8,6 +8,7 @@ import { AuthService } from '../../services/auth';
 import { CategoriesService } from '../../services/categories';
 import { KitchensService } from '../../services/kitchens';
 import { LocationsService } from '../../services/locations';
+import { LegalService } from '../../services/legal';
 import { UsersService } from '../../services/users';
 import { AccountInvites } from '../../components/account-invites';
 import { EditableListComponent } from '../../components/editable-list';
@@ -18,6 +19,7 @@ import { LanguageSelector } from '../../components/language-selector';
   selector: 'app-settings',
   imports: [
     FormsModule,
+    RouterLink,
     TranslatePipe,
     AccountInvites,
     EditableListComponent,
@@ -70,6 +72,23 @@ import { LanguageSelector } from '../../components/language-selector';
 
       <app-account-invites />
 
+      <div class="ios-card divide-y divide-separator">
+        @if (legal.info()?.configured) {
+          <a routerLink="/impressum" class="flex items-center justify-between p-4 text-[17px] active:bg-surface-press">
+            <span>{{ 'imprint.link' | translate }}</span>
+            <svg class="h-5 w-5 text-label-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+            </svg>
+          </a>
+        }
+        <a routerLink="/datenschutz" class="flex items-center justify-between p-4 text-[17px] active:bg-surface-press">
+          <span>{{ 'privacy.link' | translate }}</span>
+          <svg class="h-5 w-5 text-label-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+          </svg>
+        </a>
+      </div>
+
       <!-- Logout -->
       <button
         (click)="logout()"
@@ -86,10 +105,12 @@ export class Settings {
   protected kitchens = inject(KitchensService);
   protected categoriesSvc = inject(CategoriesService);
   protected locationsSvc = inject(LocationsService);
+  protected legal = inject(LegalService);
   private router = inject(Router);
 
   constructor() {
     if (this.users.members().length === 0) void this.users.load();
+    void this.legal.load();
   }
 
   async changeColor(color: string): Promise<void> {

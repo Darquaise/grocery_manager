@@ -1,15 +1,16 @@
 import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 
 import { AuthService } from '../../services/auth';
+import { LegalService } from '../../services/legal';
 import { LanguageSelector } from '../../components/language-selector';
 
 @Component({
   selector: 'app-login',
-  imports: [FormsModule, TranslatePipe, LanguageSelector],
+  imports: [FormsModule, RouterLink, TranslatePipe, LanguageSelector],
   template: `
     <div class="absolute right-3 top-[calc(0.75rem+env(safe-area-inset-top))] z-10">
       <app-language-selector />
@@ -62,6 +63,12 @@ import { LanguageSelector } from '../../components/language-selector';
         >
           {{ (registering() ? 'login.haveAccount' : 'login.noAccount') | translate }}
         </button>
+        <p class="flex justify-center gap-4 pt-2 text-[13px] text-label-3">
+          @if (legal.info()?.configured) {
+            <a routerLink="/impressum">{{ 'imprint.link' | translate }}</a>
+          }
+          <a routerLink="/datenschutz">{{ 'privacy.link' | translate }}</a>
+        </p>
       </form>
     </div>
   `,
@@ -70,6 +77,7 @@ export class Login {
   private auth = inject(AuthService);
   private router = inject(Router);
   private translate = inject(TranslateService);
+  protected legal = inject(LegalService);
 
   name = '';
   password = '';
@@ -77,6 +85,10 @@ export class Login {
   error = '';
   loading = false;
   readonly registering = signal(false);
+
+  constructor() {
+    void this.legal.load();
+  }
 
   toggleMode(): void {
     this.registering.set(!this.registering());

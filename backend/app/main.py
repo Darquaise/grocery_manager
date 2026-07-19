@@ -9,7 +9,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.types import Scope
 
-from .api import auth, invites, kitchens, products, shopping, users
+from .api import auth, invites, kitchens, legal, products, shopping, users
 from .api.named_lists import categories_router, locations_router
 from .config import settings
 from .db import engine
@@ -67,6 +67,7 @@ app.include_router(categories_router, prefix="/api")
 app.include_router(locations_router, prefix="/api")
 app.include_router(products.router, prefix="/api")
 app.include_router(shopping.router, prefix="/api")
+app.include_router(legal.router, prefix="/api")
 
 
 @app.get("/api/health")

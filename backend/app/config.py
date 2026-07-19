@@ -27,6 +27,19 @@ class Settings(BaseSettings):
     # is set to false there.
     db_auto_create: bool = True
 
+    # Imprint / privacy-policy provider details (§ 5 DDG, Art. 13 GDPR). Empty
+    # by default: a privately run instance is not subject to the imprint duty,
+    # and the frontend hides the imprint link unless name+street+city are set.
+    legal_name: str = ""
+    legal_care_of: str = ""
+    legal_street: str = ""
+    legal_city: str = ""
+    legal_country: str = ""
+    legal_email: str = ""
+    legal_vat_id: str = ""
+    # Named in the privacy policy as the Art. 28 GDPR processor.
+    legal_hosting_provider: str = ""
+
     # The two seeded accounts (created on first start if name+password are set).
     user1_name: str = ""
     user1_password: str = ""

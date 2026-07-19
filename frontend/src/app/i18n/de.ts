@@ -185,6 +185,56 @@ export const de: typeof en = {
     language: 'Sprache',
     logout: 'Abmelden',
   },
+  legal: {
+    back: 'Zurück',
+  },
+  privacy: {
+    title: 'Datenschutz',
+    link: 'Datenschutzerklärung',
+    controller: 'Verantwortlicher',
+    data: {
+      title: 'Welche Daten wir verarbeiten',
+      text: 'Bei der Registrierung speichern wir einen frei wählbaren Benutzernamen, ein Passwort (ausschließlich als kryptografischer Hash, niemals im Klartext), eine Anzeigefarbe und die gewählte Sprache. Eine E-Mail-Adresse wird nicht erhoben.\n\nWährend der Nutzung entstehen die von dir eingegebenen Inhalte: Küchen, Vorräte, Produkte, Kategorien, Lagerorte, Einkaufslisten und Einladungen. Änderungen an Beständen werden mit dem Zeitpunkt und dem ändernden Nutzerkonto gespeichert, damit Mitglieder einer Küche nachvollziehen können, wer was zuletzt angepasst hat.',
+    },
+    purpose: {
+      title: 'Zweck und Rechtsgrundlage',
+      text: 'Die Daten werden ausschließlich verarbeitet, um die Funktionen der Anwendung bereitzustellen — also um dich anzumelden und deine Vorräte gemeinsam mit den Mitgliedern deiner Küche zu verwalten. Rechtsgrundlage ist Art. 6 Abs. 1 lit. b DSGVO (Erfüllung des Nutzungsverhältnisses). Eine Auswertung deines Verhaltens, Profilbildung oder automatisierte Entscheidungsfindung findet nicht statt.',
+    },
+    cookies: {
+      title: 'Cookies',
+      text: 'Wir setzen ein einziges, technisch notwendiges Cookie: ein signiertes Sitzungs-Cookie, das dich nach dem Anmelden angemeldet hält. Es enthält keine Werbe- oder Trackingkennungen und wird nicht an Dritte übermittelt. Nach § 25 Abs. 2 TDDDG ist dafür keine Einwilligung erforderlich; ein Cookie-Banner entfällt deshalb.\n\nZusätzlich speichert die Anwendung Daten lokal auf deinem Gerät (Offline-Datenbank und Service Worker), damit sie ohne Verbindung nutzbar bleibt. Diese Daten verlassen dein Gerät nicht und lassen sich durch Löschen der Websitedaten im Browser entfernen.',
+    },
+    hosting: {
+      title: 'Hosting und Server-Logs',
+      text: 'Die Anwendung wird auf einem Server von {{provider}} betrieben. Der Anbieter ist dabei als Auftragsverarbeiter nach Art. 28 DSGVO für uns tätig und verarbeitet die Daten ausschließlich weisungsgebunden; ein entsprechender Auftragsverarbeitungsvertrag besteht.\n\nBeim Aufruf fallen technisch bedingt Server-Logs an (IP-Adresse, Zeitpunkt, aufgerufene Adresse, Browserkennung). Sie dienen dem sicheren Betrieb und der Fehlersuche; Rechtsgrundlage ist Art. 6 Abs. 1 lit. f DSGVO.',
+      textGeneric:
+        'Die Anwendung wird auf einem Server betrieben, der von einem Hosting-Dienstleister bereitgestellt wird. Dieser ist als Auftragsverarbeiter nach Art. 28 DSGVO weisungsgebunden tätig.\n\nBeim Aufruf fallen technisch bedingt Server-Logs an (IP-Adresse, Zeitpunkt, aufgerufene Adresse, Browserkennung). Sie dienen dem sicheren Betrieb und der Fehlersuche; Rechtsgrundlage ist Art. 6 Abs. 1 lit. f DSGVO.',
+    },
+    retention: {
+      title: 'Speicherdauer',
+      text: 'Kontodaten und Inhalte werden gespeichert, solange dein Konto besteht. Auf Wunsch löschen wir dein Konto samt der damit verknüpften personenbezogenen Daten. Inhalte einer gemeinsam genutzten Küche können erhalten bleiben, soweit sie den übrigen Mitgliedern weiterhin zugeordnet sind.',
+    },
+    rights: {
+      title: 'Deine Rechte',
+      text: 'Du hast das Recht auf Auskunft (Art. 15 DSGVO), Berichtigung (Art. 16), Löschung (Art. 17), Einschränkung der Verarbeitung (Art. 18), Datenübertragbarkeit (Art. 20) sowie Widerspruch gegen die Verarbeitung (Art. 21). Wende dich dazu an die oben genannte Kontaktadresse.\n\nAußerdem steht dir ein Beschwerderecht bei einer Datenschutz-Aufsichtsbehörde zu, in der Regel der Behörde deines Wohnsitzlandes.',
+    },
+    thirdParties: {
+      title: 'Weitergabe an Dritte',
+      text: 'Deine Daten werden nicht verkauft und nicht zu fremden Zwecken weitergegeben. Zugriff hat allein der oben genannte Hosting-Dienstleister, und zwar ausschließlich als weisungsgebundener Auftragsverarbeiter.\n\nDie Anwendung bindet keine externen Schriftarten, Analysedienste, Werbenetzwerke oder Social-Media-Plugins ein. Eine Übermittlung in Länder außerhalb der EU bzw. des EWR findet nicht statt.',
+    },
+  },
+  imprint: {
+    title: 'Impressum',
+    link: 'Impressum',
+    notConfigured:
+      'Für diese Instanz sind keine Anbieterangaben hinterlegt. Wer die Anwendung geschäftsmäßig betreibt, trägt sie über die LEGAL_*-Variablen in der .env ein.',
+    provider: 'Angaben gemäß § 5 DDG',
+    contact: 'Kontakt',
+    vatId: 'Umsatzsteuer-Identifikationsnummer',
+    disclaimer: 'Haftung für Inhalte',
+    disclaimerText:
+      'Als Diensteanbieter sind wir für eigene Inhalte auf diesen Seiten nach den allgemeinen Gesetzen verantwortlich. Wir sind jedoch nicht verpflichtet, übermittelte oder gespeicherte fremde Informationen zu überwachen oder nach Umständen zu forschen, die auf eine rechtswidrige Tätigkeit hinweisen.',
+  },
   editableList: {
     noEntries: 'Noch keine Einträge.',
     edit: 'Bearbeiten',

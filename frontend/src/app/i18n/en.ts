@@ -181,6 +181,56 @@ export const en = {
     language: 'Language',
     logout: 'Log out',
   },
+  legal: {
+    back: 'Back',
+  },
+  privacy: {
+    title: 'Privacy',
+    link: 'Privacy policy',
+    controller: 'Controller',
+    data: {
+      title: 'What data we process',
+      text: 'When you register we store a username of your choosing, a password (only as a cryptographic hash, never in plain text), a display colour and your chosen language. No email address is collected.\n\nDuring use, the content you enter is stored: kitchens, stock, products, categories, storage locations, shopping lists and invitations. Changes to stock are recorded with a timestamp and the account that made them, so that members of a kitchen can see who last adjusted what.',
+    },
+    purpose: {
+      title: 'Purpose and legal basis',
+      text: 'Your data is processed solely to provide the functions of the application — to sign you in and to let you manage your stock together with the members of your kitchen. The legal basis is Art. 6(1)(b) GDPR (performance of the user relationship). We do not analyse your behaviour, build profiles or carry out automated decision-making.',
+    },
+    cookies: {
+      title: 'Cookies',
+      text: 'We use a single, strictly necessary cookie: a signed session cookie that keeps you signed in. It contains no advertising or tracking identifiers and is not shared with third parties. Under § 25(2) TDDDG no consent is required for this, which is why there is no cookie banner.\n\nThe application also stores data locally on your device (offline database and service worker) so that it remains usable without a connection. This data never leaves your device and can be removed by clearing the site data in your browser.',
+    },
+    hosting: {
+      title: 'Hosting and server logs',
+      text: 'The application runs on a server operated by {{provider}}. The provider acts as our processor under Art. 28 GDPR and processes the data solely on our instructions; a corresponding data processing agreement is in place.\n\nAccessing the application necessarily produces server logs (IP address, timestamp, requested address, browser identification). These serve secure operation and troubleshooting; the legal basis is Art. 6(1)(f) GDPR.',
+      textGeneric:
+        'The application runs on a server provided by a hosting service provider, who acts as our processor under Art. 28 GDPR and is bound by our instructions.\n\nAccessing the application necessarily produces server logs (IP address, timestamp, requested address, browser identification). These serve secure operation and troubleshooting; the legal basis is Art. 6(1)(f) GDPR.',
+    },
+    retention: {
+      title: 'Retention',
+      text: 'Account data and content are stored for as long as your account exists. On request we will delete your account together with the personal data linked to it. Content in a shared kitchen may be retained where it remains attributed to the other members.',
+    },
+    rights: {
+      title: 'Your rights',
+      text: 'You have the right to access (Art. 15 GDPR), rectification (Art. 16), erasure (Art. 17), restriction of processing (Art. 18), data portability (Art. 20) and to object to processing (Art. 21). Please use the contact address above.\n\nYou also have the right to lodge a complaint with a data protection supervisory authority, usually the authority of your country of residence.',
+    },
+    thirdParties: {
+      title: 'Sharing with third parties',
+      text: 'Your data is never sold or passed on for outside purposes. The only party with access is the hosting provider named above, and solely as a processor bound by our instructions.\n\nThe application embeds no external fonts, analytics services, advertising networks or social media plugins. No data is transferred to countries outside the EU or EEA.',
+    },
+  },
+  imprint: {
+    title: 'Legal notice',
+    link: 'Legal notice',
+    notConfigured:
+      'No provider details are configured for this instance. Anyone running the application commercially should set them via the LEGAL_* variables in .env.',
+    provider: 'Information pursuant to § 5 DDG',
+    contact: 'Contact',
+    vatId: 'VAT identification number',
+    disclaimer: 'Liability for content',
+    disclaimerText:
+      'As a service provider, we are responsible for our own content on these pages under the general laws. However, we are not obliged to monitor transmitted or stored third-party information or to investigate circumstances that indicate illegal activity.',
+  },
   editableList: {
     noEntries: 'No entries yet.',
     edit: 'Edit',

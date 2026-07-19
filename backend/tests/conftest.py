@@ -15,6 +15,16 @@ os.environ.update(
     USER2_NAME="bob",
     USER2_PASSWORD="pw-bob",
     USER2_COLOR="#ef4444",
+    # Blank the imprint details: a developer's own .env carries real values,
+    # which would otherwise leak in and flip `configured` to true.
+    LEGAL_NAME="",
+    LEGAL_CARE_OF="",
+    LEGAL_STREET="",
+    LEGAL_CITY="",
+    LEGAL_COUNTRY="",
+    LEGAL_EMAIL="",
+    LEGAL_VAT_ID="",
+    LEGAL_HOSTING_PROVIDER="",
 )
 
 import pytest  # noqa: E402
